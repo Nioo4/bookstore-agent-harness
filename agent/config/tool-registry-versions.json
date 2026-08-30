@@ -1,0 +1,8 @@
+{
+  "schema_version": "v1",
+  "versions": {
+    "evaluation-v1": "61f11527d9785ce47f77e3e90ef4dc24099309280f4cb3e6059a6320344c452a",
+    "live-v1": "d95c6e855991e9bece712cedc9dee0f1dd1a84a48b61da026fabb79fa28febfd",
+    "evaluation-v2": "d95c6e855991e9bece712cedc9dee0f1dd1a84a48b61da026fabb79fa28febfd"
+  }
+}

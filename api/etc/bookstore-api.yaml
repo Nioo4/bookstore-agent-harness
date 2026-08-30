@@ -1,0 +1,66 @@
+Name: bookstore-api
+Host: 127.0.0.1
+Port: 8888
+Timeout: 1500
+CpuThreshold: 800
+Middlewares:
+  Breaker: true
+  Shedding: true
+  Timeout: true
+Prometheus:
+  Host: 0.0.0.0
+  Port: 9101
+  Path: /metrics
+Telemetry:
+  Name: bookstore-api
+  Endpoint: 127.0.0.1:4317
+  Sampler: 1.0
+  Batcher: otlpgrpc
+Add:
+  Etcd:
+    Hosts:
+      - localhost:2379
+    Key: add.rpc
+  Timeout: 1000
+  Middlewares:
+    Breaker: true
+    Timeout: true
+Check:
+  Etcd:
+    Hosts:
+      - localhost:2379
+    Key: check.rpc
+  Timeout: 1000
+  Middlewares:
+    Breaker: true
+    Timeout: true
+Auth:
+  Etcd:
+    Hosts:
+      - localhost:2379
+    Key: auth.rpc
+  Timeout: 1000
+  Middlewares:
+    Breaker: true
+    Timeout: true
+Order:
+  Etcd:
+    Hosts:
+      - localhost:2379
+    Key: order.rpc
+  Timeout: 1000
+  Middlewares:
+    Breaker: true
+    Timeout: true
+StockRateLimit:
+  Enabled: true
+  Rate: 100
+  Burst: 200
+  Key: bookstore:stock-deduct
+  Redis:
+    Host: 127.0.0.1:6379
+    Type: node
+HotCache:
+  Enabled: true
+  TTL: 2s
+  Limit: 1024

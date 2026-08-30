@@ -1,0 +1,17 @@
+groups:
+  - name: bookstore-agent
+    rules:
+      - alert: BookstoreServiceUnavailable
+        expr: up == 0
+        for: 2m
+        labels: {severity: warning}
+        annotations: {summary: "Bookstore service is unavailable"}
+      - alert: BookstoreInventoryDeadLetter
+        expr: increase(bookstore_agent_event_dead_letters_total[5m]) > 0
+        labels: {severity: critical}
+        annotations: {summary: "Inventory event reached dead letter queue; inspect replay procedure"}
+      - alert: BookstoreAgentFailureRate
+        expr: sum(rate(bookstore_agent_tasks_total{status="FAILED"}[5m])) / clamp_min(sum(rate(bookstore_agent_tasks_total[5m])), 0.001) > 0.1
+        for: 5m
+        labels: {severity: warning}
+        annotations: {summary: "Agent chat failure ratio exceeds ten percent"}

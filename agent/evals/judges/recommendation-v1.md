@@ -1,0 +1,1 @@
+Evaluate only recommendation relevance, constraint coverage, clarity, and reason quality from the supplied safe answer and evidence. Return four integer scores from 1 to 5 and a reason of at most 512 characters. Do not judge transaction safety, authorization, price, amount, or inventory correctness.

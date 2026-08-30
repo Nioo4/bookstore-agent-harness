@@ -1,0 +1,19 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: bookstore-api
+    static_configs:
+      - targets:
+          - host.docker.internal:9101
+
+  - job_name: bookstore-add-rpc
+    static_configs:
+      - targets:
+          - host.docker.internal:9102
+
+  - job_name: bookstore-check-rpc
+    static_configs:
+      - targets:
+          - host.docker.internal:9103

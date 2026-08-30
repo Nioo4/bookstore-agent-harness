@@ -1,0 +1,217 @@
+schema_version: v1
+suite_version: v1
+isolated: true
+network_access: false
+case_count: 40
+case_ids:
+- simple-query-001
+- simple-query-002
+- simple-query-003
+- simple-query-004
+- simple-query-005
+- simple-query-006
+- simple-query-007
+- simple-query-008
+- recommendation-001
+- recommendation-002
+- recommendation-003
+- recommendation-004
+- recommendation-005
+- recommendation-006
+- recommendation-007
+- recommendation-008
+- recommendation-009
+- recommendation-010
+- memory-001
+- memory-002
+- memory-003
+- memory-004
+- memory-005
+- order-001
+- order-002
+- order-003
+- order-004
+- order-005
+- injection-001
+- injection-002
+- injection-003
+- injection-004
+- injection-005
+- recovery-001
+- recovery-002
+- recovery-003
+- recovery-004
+- degradation-001
+- degradation-002
+- degradation-003
+category_counts:
+  SIMPLE_QUERY: 8
+  MULTI_CONSTRAINT_RECOMMENDATION: 10
+  LONG_TERM_MEMORY: 5
+  ORDER_CONFIRMATION_CONCURRENCY: 5
+  PROMPT_INJECTION: 5
+  PERSISTENT_TASK_RECOVERY: 4
+  DEPENDENCY_DEGRADATION: 3
+files:
+- path: cases.jsonl
+  sha256: 1950255003b53069adef390d8f54afd4bdf18e23b0118ac5360d0094e0983ada
+- path: fake-model/degradation-001.json
+  sha256: 8c15f01bd55d88e8d542f0e4ef084b5435786d4dadc291f4d76d3e63183bf662
+- path: fake-model/degradation-002.json
+  sha256: 64ce970b79db2896d65c672ec6b3a0e9bbded5b3a1317e4411228280c848b0fe
+- path: fake-model/degradation-003.json
+  sha256: 5185b8cfd32aa0515e27770eebacd79d01be60e2a6e0a2448eb2bb5280ad3ca5
+- path: fake-model/injection-001.json
+  sha256: 7bd530df8342f39d43b56a2e9c1882605bccf8331087eb4c67ed2609f609d7fa
+- path: fake-model/injection-002.json
+  sha256: 31511891a10a57d90432c7826564ff7a612671358a9ae908f7b185c4e39d6429
+- path: fake-model/injection-003.json
+  sha256: 0e9b167e4223794cdd88740863cd407bbfb664f3609910e3c95ec969dc9069a0
+- path: fake-model/injection-004.json
+  sha256: 178746af08e85745b3bd1c287a1b2451d654504c4bb0096871fe7ab11e8fdb50
+- path: fake-model/injection-005.json
+  sha256: 6631a75bec5e35f627f3c18d25a00a4cf1a04cbdf9feb8d6b2b47292b6fc17f2
+- path: fake-model/memory-001.json
+  sha256: bc165d9a9708cdfb61691662c23d27d1c13230442f26b66fbb7a644ed9d81f51
+- path: fake-model/memory-002.json
+  sha256: 51bb6e03fa7e6038f0d85261c9126d3fe496ab05460c3bda65f89f798f771a96
+- path: fake-model/memory-003.json
+  sha256: 05061dcab96360b176e42d1f1053ce18d830f87619b9953ba77199dce25efe9d
+- path: fake-model/memory-004.json
+  sha256: c07a3bf536aa02fdbb98e130e8bb8223fb9bbb0973dc36cb255ef498ffabc495
+- path: fake-model/memory-005.json
+  sha256: e0d2f382011813fd36803ef2e201ee9d3d8522da2f895555ad4d5d445b637522
+- path: fake-model/order-001.json
+  sha256: b8bca7daaccd79938267d51d2f3c8cf64f71639967de39da720adc782ecc210a
+- path: fake-model/order-002.json
+  sha256: 95f670cb6cfce100e6daeb9a34dfd19b12357a0a1e647cd868ee728fdf40fbb1
+- path: fake-model/order-003.json
+  sha256: ac8b16399808b3b3780d47343bcb09d043e6bc10f431faa4062683309106ec12
+- path: fake-model/order-004.json
+  sha256: b565126ce9b061c8d96e9155d5424379664b90b64315bfcd14eb470fb2ebd7d0
+- path: fake-model/order-005.json
+  sha256: 0850f67d73fab04f370ab435fe4e249d286a55453b5199869b809f89741dd66f
+- path: fake-model/recommendation-001.json
+  sha256: 328563cccb56d64fd3c67ad1fe65a15d09ffe506e0289ce0ac2459b9d5c5b59c
+- path: fake-model/recommendation-002.json
+  sha256: 35bf5177d1e54285f73980a20a4b92734b299042fc176cc36363c4758c74f1ec
+- path: fake-model/recommendation-003.json
+  sha256: a1dff88e58c8c8aa08d0c72fc4e31057483c3ba14a57a914f99809b31ab4d9ef
+- path: fake-model/recommendation-004.json
+  sha256: d8e74519ac57c4c58c069aaa4ca7e52b87b87221fe35767bfb11edc56da0e681
+- path: fake-model/recommendation-005.json
+  sha256: fce34be3d0c7007a0d924f1246e2b6a0b2569c8af5c9be0d32028f187035e82f
+- path: fake-model/recommendation-006.json
+  sha256: 0a1ddcd442b7c6bc62f3e3f3df09d63340dd3f61adf16dfbb68d886f2b5eb5ba
+- path: fake-model/recommendation-007.json
+  sha256: f63ee33377959c907a8e8c3629937bce4c9754cde011e96d828fdce8dd30ff57
+- path: fake-model/recommendation-008.json
+  sha256: ba58cb9449a125c41e6c5b38f2d7d5208d25e277b09ce57d09da124542688727
+- path: fake-model/recommendation-009.json
+  sha256: 33ba99c0fc272967f61fd2f7bb183b3f178a830243ac091354ad99d10529a6fa
+- path: fake-model/recommendation-010.json
+  sha256: a349d9ce9280756d523777aaeac39b4787756c2ad62cd0838e922e2f091b0e7e
+- path: fake-model/recovery-001.json
+  sha256: 5e8d43f9bf73417639db51a82214d5f1cb9dd20a80ef5f2ec3bceeb0797a6b8c
+- path: fake-model/recovery-002.json
+  sha256: aa613ba6d98593d99a8e14760b6487df55864bf53760d4b10827ca985b2280e5
+- path: fake-model/recovery-003.json
+  sha256: 6a6887e1a20118d1149b91c7f632e64ee43b7e57bc779c797adb63d07645257d
+- path: fake-model/recovery-004.json
+  sha256: 143158fcd4a34b51e345f147addb5f507687ad800aca7708e8458030656fec1e
+- path: fake-model/simple-query-001.json
+  sha256: fff900e0ea955eda22454c0e483d704350b266487ade595039e3da836dd7a3aa
+- path: fake-model/simple-query-002.json
+  sha256: 69cf3ebec0b7f413385b8769aae5ff6ded13bbbdf33e0cc1857a8b3848dfd4e0
+- path: fake-model/simple-query-003.json
+  sha256: ab493fa26f4ced1da142844c8033d6863ed8b064e22dfae524fce354295a0319
+- path: fake-model/simple-query-004.json
+  sha256: 4852999655191b71ed823734fd422786f08d631b9731f9d17c8b6124a924538f
+- path: fake-model/simple-query-005.json
+  sha256: 89b5bc0d8a174e47910229a7b67ce0bb7a4e373845e6b18d051c55f312481210
+- path: fake-model/simple-query-006.json
+  sha256: 7e33b3ab89b40c683579b280dfcf9afe9df477dfcbc0a081fe8bf6d2f7b4a9c7
+- path: fake-model/simple-query-007.json
+  sha256: 8eb690c30eda898ebdbbc5234627a4c15f3ef975609c27c984f93ce30920797f
+- path: fake-model/simple-query-008.json
+  sha256: af56ba6d3d4d389c1ff3bb856ff423a4df9901c8666f69c96d3e7bc3ae5563c3
+- path: fixtures/degradation-001.json
+  sha256: cf7c22191b6f0d84c499ea66505afc2d795d27afd1f46c1d85d65570d4487c0e
+- path: fixtures/degradation-002.json
+  sha256: f27fad7bc3e1d1c0f6822fa71d92d5b5069804a34ca5d0817a11646d11fb9201
+- path: fixtures/degradation-003.json
+  sha256: 848dcd4e30f5aee7a09c2d68db65694477d844011b2e1c0082dc635165d7d0f2
+- path: fixtures/injection-001.json
+  sha256: e3144ea3340e85cfd7b98171929ff29755cd25ee3b02a5013b4976f65d7386ea
+- path: fixtures/injection-002.json
+  sha256: 369c361f40f724080768e8bf9776715183495b2cf6d7d8ccc5560ce562ddc502
+- path: fixtures/injection-003.json
+  sha256: 9604001703ea7618c61d663d217c2396b9b91f1727eea66f955b9a0e805d23f5
+- path: fixtures/injection-004.json
+  sha256: d77fd45b579419509468ecd62f0f526ce7b0e3ec5b83cabd0374d53f4af4536b
+- path: fixtures/injection-005.json
+  sha256: c3c1e7bd0063dc67e7fec70814635807b089f4857d73f7862e72a879b2c42310
+- path: fixtures/memory-001.json
+  sha256: 7f28453c0e855538b284c1a6cca21136c86e00ece1ee8762f959af36012d6d00
+- path: fixtures/memory-002.json
+  sha256: ed1343928909a005b6508b9f1fd308ced3c63cc1bb29362ac535ba7df321793d
+- path: fixtures/memory-003.json
+  sha256: 063a44a420736ddff9d6f51b9d15a90e58e8fd8308e4e0bc1f5bde82a83a4d12
+- path: fixtures/memory-004.json
+  sha256: 46d0fe8c38fae54a40de98e7cea8832bfa437378794bdb0e93ac375cc7ed4c6e
+- path: fixtures/memory-005.json
+  sha256: 7cf30925fcb4c7be33fcba8b75e71347b3e48f07ea7c98cc4264e90120956bf3
+- path: fixtures/order-001.json
+  sha256: eb73385ba3b4adcdf5bd210537cd8bbc90c77567ad06c26d5278c4e5f0821b06
+- path: fixtures/order-002.json
+  sha256: 6eb1558b3bee14cf7ab265116a5d0713672c6c76aebbed6882037bf139b2e366
+- path: fixtures/order-003.json
+  sha256: acfcd54b40d3d68ab4970a55dfa1d8ac4225d433c030d54ab4e90c191715ee11
+- path: fixtures/order-004.json
+  sha256: d75edec73d0c713ceb2e7e9e5ad90fd7e0491a263d9cb77830a913adaece3039
+- path: fixtures/order-005.json
+  sha256: eebbb0a5e6b709771ebcd96d4b333d4088f33947cd4579b491093f92b6f851a1
+- path: fixtures/recommendation-001.json
+  sha256: 16d9f8f8d41d0e4b05d906bed0af60311b5d953411599158500f10dfe364abc9
+- path: fixtures/recommendation-002.json
+  sha256: d8d6ae00a4fdd175d8630ff57122a4a5eebe6fc2850f837ce4a88ae4fce3611d
+- path: fixtures/recommendation-003.json
+  sha256: e60e393514f0a410ad327f12484ae7e0dfccbfd154aaac3217d9aae160495bfb
+- path: fixtures/recommendation-004.json
+  sha256: f7084e78f4250d195aa3844aeccb1171674a90779f8b3de8240880aaeed3ae7b
+- path: fixtures/recommendation-005.json
+  sha256: f480615303a64659048ffd8cd855291b339684a7cb778cacec5aa209d81ed599
+- path: fixtures/recommendation-006.json
+  sha256: 87b9f4a80170ec0c6d7bb1b283dcf43df6d30b678cfce2e9fd927667f368c59c
+- path: fixtures/recommendation-007.json
+  sha256: 353827be93acaaca67034d47c2dd206892f911c1ec95a1e0de3dc0b2bb708797
+- path: fixtures/recommendation-008.json
+  sha256: 626375360e38223ba73211038d1cda43ff41ff3c1eb3a4d096b798d70f938b7c
+- path: fixtures/recommendation-009.json
+  sha256: 88b284caea4391960a8a424485bfa426db1545cb592d16cff76b9a577ad02680
+- path: fixtures/recommendation-010.json
+  sha256: 84d0dbd6f7ba5c7508d6750ef6019a27f6482519c2b9d1f5d8c512b3c6fc95f1
+- path: fixtures/recovery-001.json
+  sha256: 88926142e9073ff35b1134715cbcc38e938c558447a2d3d5f8321d8faa2dd6e2
+- path: fixtures/recovery-002.json
+  sha256: 8bca4de34a3134472a859072b8a3826274b16d94a6ac64813421a857c9e844b6
+- path: fixtures/recovery-003.json
+  sha256: a71a12b2b0955c9a8a4d9c161ec943061efe60cad1c125d761bbc74fe1921d17
+- path: fixtures/recovery-004.json
+  sha256: 3f4a5ed565afb2e2f46816107c3d0870f597de1c47d02180c1ebf1ad01e68687
+- path: fixtures/simple-query-001.json
+  sha256: f6b3177452a6549933c5cb0c4573197ad7c21277a46c7e2f6a6b493f7bfddbff
+- path: fixtures/simple-query-002.json
+  sha256: a9a2ea7749f0a431859f6c54c171bc66cffe065d18dd43c79c57fbc3e5dfe51d
+- path: fixtures/simple-query-003.json
+  sha256: 65f933dd8cc64bbc8e2e5d7e5d3c74a22f92c6d4445d5797698c1dd8acdf57cc
+- path: fixtures/simple-query-004.json
+  sha256: dd025a19edb5cebaf4a87cc9c6d8b34d2cace2dd0573d8e94bc1c41153cdf5cc
+- path: fixtures/simple-query-005.json
+  sha256: 1b2585daa9158175f9c3213d937e931ac61d180f7671f568e70790af3831cc55
+- path: fixtures/simple-query-006.json
+  sha256: 3822c451cf597c9a0778e1c9774234b47fbd2a68d201882ff1eb9152b9beb263
+- path: fixtures/simple-query-007.json
+  sha256: 7a83329d0692b9cc58f70eb0a45158c92977f1fbcbd14907b8a8a821473818d3
+- path: fixtures/simple-query-008.json
+  sha256: dc772609d34cb38e8096f5350fa0dfafccfce7b842fd6b751a19694834493f3c

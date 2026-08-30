@@ -1,0 +1,225 @@
+{
+  "schema_version": "v2",
+  "responses": [
+    {
+      "caller": "intent_extractor",
+      "call_scope": "turn-1/intent_extractor",
+      "ordinal": 1,
+      "response_schema_sha256": "340f836098ea765eac418866e8f8ca6222b5288d158bde024f04725c9d31d372",
+      "outcome": "RESPONSE",
+      "response": {
+        "content": "{\"constraints\":{},\"required_question_ids\":[\"answer\"]}",
+        "model": "deterministic-fake-v2",
+        "usage": {
+          "prompt_tokens": 10,
+          "completion_tokens": 5,
+          "cached_tokens": null,
+          "reasoning_tokens": null
+        },
+        "finish_reason": null,
+        "raw_tool_calls": []
+      },
+      "error_code": null
+    },
+    {
+      "caller": "supervisor",
+      "call_scope": "turn-1/supervisor",
+      "ordinal": 1,
+      "response_schema_sha256": "f50b5a4902eaa660fe336e7ec2584d200243f79636ee8d3aab3429eef6812e34",
+      "outcome": "RESPONSE",
+      "response": {
+        "content": "{\"goal\":\"以后偏好中文分布式，每本预算40元\",\"nodes\":[{\"agent\":\"catalog\",\"depends_on\":[],\"expected_output\":\"candidates\",\"id\":\"catalog_read\",\"input_refs\":[\"user_request\"],\"objective\":\"以后偏好中文分布式，每本预算40元\"}]}",
+        "model": "deterministic-fake-v2",
+        "usage": {
+          "prompt_tokens": 10,
+          "completion_tokens": 5,
+          "cached_tokens": null,
+          "reasoning_tokens": null
+        },
+        "finish_reason": null,
+        "raw_tool_calls": []
+      },
+      "error_code": null
+    },
+    {
+      "caller": "catalog",
+      "call_scope": "turn-1/catalog_read",
+      "ordinal": 1,
+      "response_schema_sha256": "527df26327df3de5f3eace0039e47487ece186474f26dd3155fbdc85c60335c8",
+      "outcome": "RESPONSE",
+      "response": {
+        "content": "{\"output\":{},\"tool_calls\":[{\"arguments\":{\"book_id\":1},\"name\":\"get_book\"}]}",
+        "model": "deterministic-fake-v2",
+        "usage": {
+          "prompt_tokens": 10,
+          "completion_tokens": 5,
+          "cached_tokens": null,
+          "reasoning_tokens": null
+        },
+        "finish_reason": null,
+        "raw_tool_calls": []
+      },
+      "error_code": null
+    },
+    {
+      "caller": "answer_synthesizer",
+      "call_scope": "turn-1/answer_synthesizer",
+      "ordinal": 1,
+      "response_schema_sha256": "4fb8ad819900ed9c21eed8ba173cb894f44ff308abcaf0e63d4da7f8800c7fe1",
+      "outcome": "RESPONSE",
+      "response": {
+        "content": "{\"addressed_question_ids\":[\"answer\"],\"answer\":\"以下书籍符合本次查询，价格和库存以目录证据为准。\",\"policy_claims\":[],\"recommendations\":[{\"available_stock\":5,\"book_id\":1,\"currency\":\"CNY\",\"evidence_ids\":[\"book:1:v1\"],\"price\":3000,\"reason\":\"目录中的语言、分类及价格符合本轮条件。\",\"satisfied_constraints\":[],\"unmet_constraints\":[]}],\"write_actions\":[]}",
+        "model": "deterministic-fake-v2",
+        "usage": {
+          "prompt_tokens": 10,
+          "completion_tokens": 5,
+          "cached_tokens": null,
+          "reasoning_tokens": null
+        },
+        "finish_reason": null,
+        "raw_tool_calls": []
+      },
+      "error_code": null
+    },
+    {
+      "caller": "verifier",
+      "call_scope": "turn-1/verifier",
+      "ordinal": 1,
+      "response_schema_sha256": "34eb480b194561d76f314e3025ee7cb0d7d285f311afe4e623d0484a76b07a4f",
+      "outcome": "RESPONSE",
+      "response": {
+        "content": "{\"approved\":true,\"issues\":[]}",
+        "model": "deterministic-fake-v2",
+        "usage": {
+          "prompt_tokens": 10,
+          "completion_tokens": 5,
+          "cached_tokens": null,
+          "reasoning_tokens": null
+        },
+        "finish_reason": null,
+        "raw_tool_calls": []
+      },
+      "error_code": null
+    },
+    {
+      "caller": "memory_extractor",
+      "call_scope": "turn-1/memory_extractor",
+      "ordinal": 1,
+      "response_schema_sha256": "f3268b4a286522a394ce28983fe142ef54655be793ca7b2644d830240b358a99",
+      "outcome": "RESPONSE",
+      "response": {
+        "content": "{\"candidates\":[{\"confidence\":1,\"memory_key\":\"preference.languages\",\"memory_type\":\"PREFERENCE\",\"operation\":\"SET\",\"source\":\"EXPLICIT\",\"value\":{\"items\":[\"zh-CN\"]}},{\"confidence\":1,\"memory_key\":\"preference.topics\",\"memory_type\":\"PREFERENCE\",\"operation\":\"SET\",\"source\":\"EXPLICIT\",\"value\":{\"items\":[\"distributed\"]}},{\"confidence\":1,\"memory_key\":\"preference.budget.CNY\",\"memory_type\":\"PREFERENCE\",\"operation\":\"SET\",\"source\":\"EXPLICIT\",\"value\":{\"currency\":\"CNY\",\"max_amount\":4000}}]}",
+        "model": "deterministic-fake-v2",
+        "usage": {
+          "prompt_tokens": 10,
+          "completion_tokens": 5,
+          "cached_tokens": null,
+          "reasoning_tokens": null
+        },
+        "finish_reason": null,
+        "raw_tool_calls": []
+      },
+      "error_code": null
+    },
+    {
+      "caller": "intent_extractor",
+      "call_scope": "turn-2/intent_extractor",
+      "ordinal": 1,
+      "response_schema_sha256": "340f836098ea765eac418866e8f8ca6222b5288d158bde024f04725c9d31d372",
+      "outcome": "RESPONSE",
+      "response": {
+        "content": "{\"constraints\":{\"categories\":[\"distributed\"],\"in_stock\":true,\"language\":\"zh-CN\",\"max_price\":4000},\"required_question_ids\":[\"answer\"]}",
+        "model": "deterministic-fake-v2",
+        "usage": {
+          "prompt_tokens": 10,
+          "completion_tokens": 5,
+          "cached_tokens": null,
+          "reasoning_tokens": null
+        },
+        "finish_reason": null,
+        "raw_tool_calls": []
+      },
+      "error_code": null
+    },
+    {
+      "caller": "supervisor",
+      "call_scope": "turn-2/supervisor",
+      "ordinal": 1,
+      "response_schema_sha256": "f50b5a4902eaa660fe336e7ec2584d200243f79636ee8d3aab3429eef6812e34",
+      "outcome": "RESPONSE",
+      "response": {
+        "content": "{\"goal\":\"请推荐两本书\",\"nodes\":[{\"agent\":\"catalog\",\"depends_on\":[],\"expected_output\":\"candidates\",\"id\":\"catalog_read\",\"input_refs\":[\"user_request\"],\"objective\":\"请推荐两本书\"},{\"agent\":\"recommendation\",\"depends_on\":[\"catalog_read\"],\"expected_output\":\"draft\",\"id\":\"recommend_books\",\"input_refs\":[\"candidates\",\"user_request\"],\"objective\":\"请推荐两本书\"}]}",
+        "model": "deterministic-fake-v2",
+        "usage": {
+          "prompt_tokens": 10,
+          "completion_tokens": 5,
+          "cached_tokens": null,
+          "reasoning_tokens": null
+        },
+        "finish_reason": null,
+        "raw_tool_calls": []
+      },
+      "error_code": null
+    },
+    {
+      "caller": "catalog",
+      "call_scope": "turn-2/catalog_read",
+      "ordinal": 1,
+      "response_schema_sha256": "527df26327df3de5f3eace0039e47487ece186474f26dd3155fbdc85c60335c8",
+      "outcome": "RESPONSE",
+      "response": {
+        "content": "{\"output\":{},\"tool_calls\":[{\"arguments\":{\"category\":\"distributed\",\"in_stock\":true,\"language\":\"zh-CN\",\"max_price\":4000},\"name\":\"search_books\"}]}",
+        "model": "deterministic-fake-v2",
+        "usage": {
+          "prompt_tokens": 10,
+          "completion_tokens": 5,
+          "cached_tokens": null,
+          "reasoning_tokens": null
+        },
+        "finish_reason": null,
+        "raw_tool_calls": []
+      },
+      "error_code": null
+    },
+    {
+      "caller": "recommendation",
+      "call_scope": "turn-2/recommend_books",
+      "ordinal": 1,
+      "response_schema_sha256": "4fb8ad819900ed9c21eed8ba173cb894f44ff308abcaf0e63d4da7f8800c7fe1",
+      "outcome": "RESPONSE",
+      "response": {
+        "content": "{\"addressed_question_ids\":[\"answer\"],\"answer\":\"以下书籍符合本次查询，价格和库存以目录证据为准。\",\"policy_claims\":[],\"recommendations\":[{\"available_stock\":5,\"book_id\":1,\"currency\":\"CNY\",\"evidence_ids\":[\"book:1:v1\"],\"price\":3000,\"reason\":\"目录中的语言、分类及价格符合本轮条件。\",\"satisfied_constraints\":[],\"unmet_constraints\":[]},{\"available_stock\":5,\"book_id\":2,\"currency\":\"CNY\",\"evidence_ids\":[\"book:2:v1\"],\"price\":4000,\"reason\":\"目录中的语言、分类及价格符合本轮条件。\",\"satisfied_constraints\":[],\"unmet_constraints\":[]}],\"write_actions\":[]}",
+        "model": "deterministic-fake-v2",
+        "usage": {
+          "prompt_tokens": 10,
+          "completion_tokens": 5,
+          "cached_tokens": null,
+          "reasoning_tokens": null
+        },
+        "finish_reason": null,
+        "raw_tool_calls": []
+      },
+      "error_code": null
+    },
+    {
+      "caller": "verifier",
+      "call_scope": "turn-2/verifier",
+      "ordinal": 1,
+      "response_schema_sha256": "34eb480b194561d76f314e3025ee7cb0d7d285f311afe4e623d0484a76b07a4f",
+      "outcome": "RESPONSE",
+      "response": {
+        "content": "{\"approved\":true,\"issues\":[]}",
+        "model": "deterministic-fake-v2",
+        "usage": {
+          "prompt_tokens": 10,
+          "completion_tokens": 5,
+          "cached_tokens": null,
+          "reasoning_tokens": null
+        },
+        "finish_reason": null,
+        "raw_tool_calls": []
+      },
+      "error_code": null
+    }
+  ]
+}

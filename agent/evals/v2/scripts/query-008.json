@@ -1,0 +1,105 @@
+{
+  "schema_version": "v2",
+  "responses": [
+    {
+      "caller": "intent_extractor",
+      "call_scope": "turn-1/intent_extractor",
+      "ordinal": 1,
+      "response_schema_sha256": "340f836098ea765eac418866e8f8ca6222b5288d158bde024f04725c9d31d372",
+      "outcome": "RESPONSE",
+      "response": {
+        "content": "{\"constraints\":{},\"required_question_ids\":[\"answer\"]}",
+        "model": "deterministic-fake-v2",
+        "usage": {
+          "prompt_tokens": 10,
+          "completion_tokens": 5,
+          "cached_tokens": null,
+          "reasoning_tokens": null
+        },
+        "finish_reason": null,
+        "raw_tool_calls": []
+      },
+      "error_code": null
+    },
+    {
+      "caller": "supervisor",
+      "call_scope": "turn-1/supervisor",
+      "ordinal": 1,
+      "response_schema_sha256": "f50b5a4902eaa660fe336e7ec2584d200243f79636ee8d3aab3429eef6812e34",
+      "outcome": "RESPONSE",
+      "response": {
+        "content": "{\"goal\":\"支持退货或物流跟踪吗？\",\"nodes\":[{\"agent\":\"knowledge\",\"depends_on\":[],\"expected_output\":\"candidates\",\"id\":\"knowledge_read\",\"input_refs\":[\"user_request\"],\"objective\":\"支持退货或物流跟踪吗？\"}]}",
+        "model": "deterministic-fake-v2",
+        "usage": {
+          "prompt_tokens": 10,
+          "completion_tokens": 5,
+          "cached_tokens": null,
+          "reasoning_tokens": null
+        },
+        "finish_reason": null,
+        "raw_tool_calls": []
+      },
+      "error_code": null
+    },
+    {
+      "caller": "knowledge",
+      "call_scope": "turn-1/knowledge_read",
+      "ordinal": 1,
+      "response_schema_sha256": "527df26327df3de5f3eace0039e47487ece186474f26dd3155fbdc85c60335c8",
+      "outcome": "RESPONSE",
+      "response": {
+        "content": "{\"output\":{},\"tool_calls\":[{\"arguments\":{\"query\":\"退货 物流跟踪\"},\"name\":\"search_policy\"}]}",
+        "model": "deterministic-fake-v2",
+        "usage": {
+          "prompt_tokens": 10,
+          "completion_tokens": 5,
+          "cached_tokens": null,
+          "reasoning_tokens": null
+        },
+        "finish_reason": null,
+        "raw_tool_calls": []
+      },
+      "error_code": null
+    },
+    {
+      "caller": "answer_synthesizer",
+      "call_scope": "turn-1/answer_synthesizer",
+      "ordinal": 1,
+      "response_schema_sha256": "4fb8ad819900ed9c21eed8ba173cb894f44ff308abcaf0e63d4da7f8800c7fe1",
+      "outcome": "RESPONSE",
+      "response": {
+        "content": "{\"addressed_question_ids\":[\"answer\"],\"answer\":\"v1不支持退货或物流跟踪。[《演示范围常见问题》v1.0，物流单号与轨迹] [《演示范围常见问题》v1.0，退款退货与换货]\",\"policy_claims\":[{\"claim\":\"## 物流单号与轨迹\\n\\n当前不支持物流单号或真实物流轨迹。\",\"evidence_ids\":[\"policy:470783fdbcaa2668abc2cacc93a26c9ad3a61db5304589bc6f07e9b6242598c0\"],\"section\":\"物流单号与轨迹\",\"source\":\"knowledge/demo-scope-faq.md\",\"version\":\"1.0\"},{\"claim\":\"## 退款退货与换货\\n\\nv1 不支持退款、退货或换货，Agent 不得声称已经执行这些操作。\",\"evidence_ids\":[\"policy:6be1b9a4353cc978e24637f9bdf51f0e03250713d63e0798bb00a07f1959f3ad\"],\"section\":\"退款退货与换货\",\"source\":\"knowledge/demo-scope-faq.md\",\"version\":\"1.0\"}],\"recommendations\":[],\"write_actions\":[]}",
+        "model": "deterministic-fake-v2",
+        "usage": {
+          "prompt_tokens": 10,
+          "completion_tokens": 5,
+          "cached_tokens": null,
+          "reasoning_tokens": null
+        },
+        "finish_reason": null,
+        "raw_tool_calls": []
+      },
+      "error_code": null
+    },
+    {
+      "caller": "verifier",
+      "call_scope": "turn-1/verifier",
+      "ordinal": 1,
+      "response_schema_sha256": "34eb480b194561d76f314e3025ee7cb0d7d285f311afe4e623d0484a76b07a4f",
+      "outcome": "RESPONSE",
+      "response": {
+        "content": "{\"approved\":true,\"issues\":[]}",
+        "model": "deterministic-fake-v2",
+        "usage": {
+          "prompt_tokens": 10,
+          "completion_tokens": 5,
+          "cached_tokens": null,
+          "reasoning_tokens": null
+        },
+        "finish_reason": null,
+        "raw_tool_calls": []
+      },
+      "error_code": null
+    }
+  ]
+}

@@ -1,0 +1,72 @@
+syntax = "proto3";
+
+package auth;
+
+option go_package = "./auth";
+
+message registerReq {
+  string email = 1;
+  string password = 2;
+  string display_name = 3;
+  string client_ip = 4;
+}
+
+message registerResp {
+  int64 user_id = 1;
+  string email = 2;
+  bool verification_email_sent = 3;
+}
+
+message verifyEmailReq {
+  string token = 1;
+  string client_ip = 2;
+}
+
+message verifyEmailResp {
+  int64 user_id = 1;
+  bool email_verified = 2;
+}
+
+message loginReq {
+  string email = 1;
+  string password = 2;
+  string client_ip = 3;
+}
+
+message authUser {
+  int64 user_id = 1;
+  string email = 2;
+  string display_name = 3;
+  bool email_verified = 4;
+}
+
+message loginResp {
+  string access_token = 1;
+  int64 expires_in = 2;
+  authUser user = 3;
+}
+
+enum ResendVerificationStatus {
+  RESEND_VERIFICATION_STATUS_UNSPECIFIED = 0;
+  SMTP_ACCEPTED = 1;
+  DELIVERY_UNCONFIRMED = 2;
+  ALREADY_VERIFIED = 3;
+}
+
+message resendVerificationReq {
+  string access_token = 1;
+  string client_ip = 2;
+}
+
+message resendVerificationResp {
+  ResendVerificationStatus status = 1;
+  bool verification_email_sent = 2;
+  int64 retry_after_seconds = 3;
+}
+
+service authenticator {
+  rpc register(registerReq) returns(registerResp);
+  rpc verifyEmail(verifyEmailReq) returns(verifyEmailResp);
+  rpc login(loginReq) returns(loginResp);
+  rpc resendVerification(resendVerificationReq) returns(resendVerificationResp);
+}

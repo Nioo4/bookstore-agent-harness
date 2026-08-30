@@ -1,0 +1,60 @@
+syntax = "proto3";
+
+package add;
+
+option go_package = "./adder";
+
+message addReq {
+    string book = 1 [deprecated = true];
+    int64 price = 2;
+    string isbn = 3;
+    string title = 4;
+    string author = 5;
+    int64 stock_count = 6;
+}
+
+message addResp {
+    bool ok = 1;
+    int64 book_id = 2;
+}
+
+message updateReq {
+    string book = 1 [deprecated = true];
+    optional int64 price = 2;
+    optional string isbn = 3;
+    optional string title = 4;
+    optional string author = 5;
+    optional int64 stock_count = 6;
+}
+
+message updateResp {
+    bool ok = 1;
+}
+
+message deleteReq {
+    string book = 1;
+}
+
+message deleteResp {
+    bool ok = 1;
+}
+
+message deductStockReq {
+    int64 book_id = 1;
+    int64 quantity = 2;
+    string idempotency_key = 3;
+}
+
+message deductStockResp {
+    bool ok = 1;
+    int64 book_id = 2;
+    int64 deducted = 3;
+    bool replayed = 4;
+}
+
+service adder {
+    rpc add(addReq) returns(addResp);
+    rpc update(updateReq) returns(updateResp);
+    rpc delete(deleteReq) returns(deleteResp);
+    rpc deductStock(deductStockReq) returns(deductStockResp);
+}

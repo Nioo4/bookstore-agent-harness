@@ -1,0 +1,74 @@
+syntax = "proto3";
+
+package check;
+
+option go_package = "./check";
+
+message checkReq {
+    string book = 1;
+}
+
+message checkResp {
+    bool found = 1;
+    int64 price = 2;
+    int64 book_id = 3;
+    string isbn = 4;
+    string title = 5;
+    string author = 6;
+    int64 stock_count = 7;
+    string subtitle = 8;
+    string description = 9;
+    string publisher = 10;
+    string publication_date = 11;
+    string language_code = 12;
+    optional int64 page_count = 13;
+    string cover_url = 14;
+    string currency = 15;
+    string status = 16;
+    uint64 version = 17;
+    repeated string authors = 18;
+    repeated string categories = 19;
+}
+
+message searchBooksReq {
+    string q = 1;
+    string author = 2;
+    string category = 3;
+    optional int64 min_price = 4;
+    optional int64 max_price = 5;
+    string language = 6;
+    optional bool in_stock = 7;
+    string sort = 8;
+    string cursor = 9;
+    int32 limit = 10;
+}
+
+message bookSummary {
+    int64 book_id = 1;
+    string isbn = 2;
+    string title = 3;
+    string subtitle = 4;
+    string description = 5;
+    string publisher = 6;
+    string publication_date = 7;
+    string language_code = 8;
+    optional int64 page_count = 9;
+    string cover_url = 10;
+    int64 price = 11;
+    string currency = 12;
+    string status = 13;
+    uint64 version = 14;
+    int64 available_stock = 15;
+    repeated string authors = 16;
+    repeated string categories = 17;
+}
+
+message searchBooksResp {
+    repeated bookSummary books = 1;
+    string next_cursor = 2;
+}
+
+service checker {
+    rpc check(checkReq) returns(checkResp);
+    rpc searchBooks(searchBooksReq) returns(searchBooksResp);
+}

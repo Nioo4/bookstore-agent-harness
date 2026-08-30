@@ -1,0 +1,1 @@
+"""Generated Catalog RPC package."""

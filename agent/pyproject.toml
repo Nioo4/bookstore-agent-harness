@@ -1,0 +1,54 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "bookstore-agent-service"
+version = "0.1.0"
+description = "Governed agent harness for the bookstore customer service system"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "asyncmy>=0.2.10,<1",
+  "fastapi>=0.141.1,<1",
+  "grpcio>=1.83,<2",
+  "httpx>=0.28,<1",
+  "langgraph>=1.2.11,<2",
+  "langgraph-checkpoint-redis>=0.5.1,<1",
+  "opentelemetry-api>=1.39,<2",
+  "opentelemetry-sdk>=1.39,<2",
+  "opentelemetry-exporter-otlp-proto-http>=1.39,<2",
+  "prometheus-client>=0.22,<1",
+  "pydantic>=2.13.4,<3",
+  "pydantic-settings>=2.10,<3",
+  "protobuf>=7,<8",
+  "pyjwt[crypto]>=2.10,<3",
+  "pyyaml>=6,<7",
+  "redis>=6.4,<7",
+  "tiktoken>=0.14,<1",
+  "uvicorn[standard]>=0.35,<1",
+]
+
+[project.scripts]
+agent-worker = "app.worker:main"
+trace-worker = "app.trace_worker:main"
+
+[project.optional-dependencies]
+dev = [
+  "grpcio-tools>=1.83,<2",
+  "pytest>=8.4,<9",
+  "pytest-asyncio>=1.1,<2",
+  "pytest-cov>=6.2,<7",
+  "opentelemetry-sdk>=1.39,<2",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app", "rpc"]
+
+[tool.pytest.ini_options]
+addopts = "-q --strict-markers"
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.coverage.run]
+branch = true
+source = ["app"]

@@ -1,0 +1,1 @@
+{"confirmation_decision":null,"error_code":null,"facts":[],"final_answer":"Recovered synthetic task 1 with one notification.","final_status":"COMPLETED","satisfied_constraints":["unique_notification","terminal_state"],"schema_version":"v1","tool_calls":[]}

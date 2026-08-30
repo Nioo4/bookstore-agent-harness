@@ -1,0 +1,26 @@
+schema_version: v1
+profiles:
+  - name: default
+    router: router-model
+    agent: agent-model
+    verifier: verifier-model
+  - name: judge-default
+    router: router-model
+    agent: judge-model
+    verifier: verifier-model
+  - name: deterministic-fake-v1
+    router: deterministic-fake-v1
+    agent: deterministic-fake-v1
+    verifier: deterministic-fake-v1
+  - name: deepseek-flash-v1
+    router: deepseek-v4-flash
+    agent: deepseek-v4-flash
+    verifier: deepseek-v4-flash
+  - name: deepseek-pro-v1
+    router: deepseek-v4-pro
+    agent: deepseek-v4-pro
+    verifier: deepseek-v4-pro
+  - name: deterministic-fake-v2
+    router: deterministic-fake-v2
+    agent: deterministic-fake-v2
+    verifier: deterministic-fake-v2

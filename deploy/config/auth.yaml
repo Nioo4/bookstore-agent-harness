@@ -1,0 +1,49 @@
+Name: auth.rpc
+ListenOn: 0.0.0.0:8082
+AuthBudget:
+  SMTP: ${SMTP_SEND_TIMEOUT}
+  RPC: ${AUTH_RPC_TIMEOUT}
+  HTTP: ${AUTH_HTTP_TIMEOUT}
+  Web: ${AUTH_WEB_TIMEOUT}
+Mode: pro
+Log:
+  Mode: console
+  Level: error
+Etcd:
+  Hosts: [etcd:2379]
+  Key: auth.rpc
+DataSource: "${MYSQL_DSN}"
+BusinessRedis:
+  Address: redis:6379
+  Password: ""
+  DB: 0
+JWT:
+  PrivateKeyPath: /keys/private/jwt-private.pem
+  PublicKeyPath: /keys/public/jwt-public.pem
+  Issuer: bookstore
+SMTP:
+  Host: "${SMTP_HOST}"
+  Port: ${SMTP_PORT}
+  Username: "${SMTP_USER}"
+  Password: "${SMTP_PASSWORD}"
+  From: "${SMTP_FROM}"
+AppBaseURL: "${APP_BASE_URL}"
+RateLimit:
+  RegisterLimit: 5
+  LoginLimit: 10
+  Window: 15m
+  ResendIPLimit: ${AUTH_RESEND_IP_LIMIT}
+  ResendEmailLimit: ${AUTH_RESEND_EMAIL_LIMIT}
+  ResendWindow: ${AUTH_RESEND_WINDOW}
+  ResendCooldown: ${AUTH_RESEND_COOLDOWN}
+Middlewares:
+  Stat: false
+Prometheus:
+  Host: 0.0.0.0
+  Port: 9104
+  Path: /metrics
+Telemetry:
+  Name: bookstore-auth-rpc
+  Endpoint: otel-collector:4317
+  Sampler: 1.0
+  Batcher: otlpgrpc

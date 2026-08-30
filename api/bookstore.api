@@ -1,0 +1,230 @@
+type (
+	RegisterReq {
+		Email string `json:"email"`
+		Password string `json:"password"`
+		DisplayName string `json:"display_name"`
+	}
+	RegisterResp {
+		UserID int64 `json:"user_id"`
+		Email string `json:"email"`
+		VerificationEmailSent bool `json:"verification_email_sent"`
+	}
+	VerifyEmailReq {
+		Token string `json:"token"`
+	}
+	VerifyEmailResp {
+		UserID int64 `json:"user_id"`
+		EmailVerified bool `json:"email_verified"`
+	}
+	LoginReq {
+		Email string `json:"email"`
+		Password string `json:"password"`
+	}
+	AuthUser {
+		UserID int64 `json:"user_id"`
+		Email string `json:"email"`
+		DisplayName string `json:"display_name"`
+		EmailVerified bool `json:"email_verified"`
+	}
+	LoginResp {
+		AccessToken string `json:"access_token"`
+		ExpiresIn int64 `json:"expires_in"`
+		User AuthUser `json:"user"`
+	}
+	OrderItem {
+		BookID int64 `json:"book_id"`
+		ISBN string `json:"isbn"`
+		Title string `json:"title"`
+		UnitPrice int64 `json:"unit_price"`
+		Quantity int64 `json:"quantity"`
+		LineTotal int64 `json:"line_total"`
+	}
+	GetOrderReq { OrderID int64 `path:"order_id"` }
+	ListOrdersReq {
+		Limit int32 `form:"limit,optional"`
+		Cursor string `form:"cursor,optional"`
+	}
+	OrderRecord {
+		OrderID int64 `json:"order_id"`
+		Status string `json:"status"`
+		Items []OrderItem `json:"items"`
+		TotalAmount int64 `json:"total_amount"`
+		Currency string `json:"currency"`
+		CreatedAt string `json:"created_at"`
+		Replayed bool `json:"replayed"`
+	}
+	ListOrdersResp {
+		Orders []OrderRecord `json:"orders"`
+		NextCursor string `json:"next_cursor,optional"`
+	}
+	// 添加书籍请求
+	AddBookReq {
+		Book       string `json:"book,optional"`
+		ISBN       string `json:"isbn,optional"`
+		Title      string `json:"title,optional"`
+		Author     string `json:"author,optional"`
+		Price      int64  `json:"price"`
+		StockCount int64  `json:"stock_count,optional"`
+	}
+	// 添加书籍响应
+	AddBookResp {
+		Ok     bool  `json:"ok"`
+		BookID int64 `json:"book_id"`
+	}
+	// 查询书籍请求
+	GetBookReq {
+		Book string `path:"book"`
+	}
+	// 查询书籍响应
+	GetBookResp {
+		Found      bool   `json:"found"`
+		BookID     int64  `json:"book_id"`
+		ISBN       string `json:"isbn"`
+		Title      string `json:"title"`
+		Author     string `json:"author"`
+		Price      int64  `json:"price"`
+		StockCount int64  `json:"stock_count"`
+		Subtitle string `json:"subtitle,optional"`
+		Description string `json:"description,optional"`
+		Publisher string `json:"publisher,optional"`
+		PublicationDate string `json:"publication_date,optional"`
+		LanguageCode string `json:"language_code"`
+		PageCount *int64 `json:"page_count,optional"`
+		CoverURL string `json:"cover_url,optional"`
+		Currency string `json:"currency"`
+		Status string `json:"status"`
+		Version uint64 `json:"version"`
+		Authors []string `json:"authors"`
+		Categories []string `json:"categories"`
+	}
+	SearchBooksReq {
+		Q string `form:"q,optional"`
+		Author string `form:"author,optional"`
+		Category string `form:"category,optional"`
+		MinPrice *int64 `form:"min_price,optional"`
+		MaxPrice *int64 `form:"max_price,optional"`
+		Language string `form:"language,optional"`
+		InStock *bool `form:"in_stock,optional"`
+		Sort string `form:"sort,optional"`
+		Cursor string `form:"cursor,optional"`
+		Limit int32 `form:"limit,optional"`
+	}
+	BookSummary {
+		BookID int64 `json:"book_id"`
+		ISBN string `json:"isbn"`
+		Title string `json:"title"`
+		Subtitle string `json:"subtitle,optional"`
+		Description string `json:"description,optional"`
+		Publisher string `json:"publisher,optional"`
+		PublicationDate string `json:"publication_date,optional"`
+		LanguageCode string `json:"language_code"`
+		PageCount *int64 `json:"page_count,optional"`
+		CoverURL string `json:"cover_url,optional"`
+		Price int64 `json:"price"`
+		Currency string `json:"currency"`
+		Status string `json:"status"`
+		Version uint64 `json:"version"`
+		AvailableStock int64 `json:"available_stock"`
+		InStock bool `json:"in_stock"`
+		Authors []string `json:"authors"`
+		Categories []string `json:"categories"`
+	}
+	SearchBooksResp {
+		Books []BookSummary `json:"books"`
+		NextCursor string `json:"next_cursor,optional"`
+	}
+	// 更新书籍请求
+	UpdateBookReq {
+		Book       string  `path:"book"`
+		ISBN       *string `json:"isbn,optional"`
+		Title      *string `json:"title,optional"`
+		Author     *string `json:"author,optional"`
+		Price      *int64  `json:"price,optional"`
+		StockCount *int64  `json:"stock_count,optional"`
+	}
+	// 更新书籍响应
+	UpdateBookResp {
+		Ok bool `json:"ok"`
+	}
+	// 删除书籍请求
+	DeleteBookReq {
+		Book string `path:"book"`
+	}
+	// 删除书籍响应
+	DeleteBookResp {
+		Ok bool `json:"ok"`
+	}
+	DeductStockReq {
+		BookID         int64  `path:"book_id"`
+		Quantity       int64  `json:"quantity"`
+		IdempotencyKey string `header:"Idempotency-Key"`
+	}
+	DeductStockResp {
+		Ok       bool  `json:"ok"`
+		BookID   int64 `json:"book_id"`
+		Deducted int64 `json:"deducted"`
+		Replayed bool  `json:"replayed"`
+	}
+	HotBookReq {
+		BookID int64 `path:"book_id"`
+	}
+	HotBookResp {
+		Found          bool   `json:"found"`
+		BookID         int64  `json:"book_id"`
+		ISBN           string `json:"isbn"`
+		Title          string `json:"title"`
+		Author         string `json:"author"`
+		Price          int64  `json:"price"`
+		StockCount     int64  `json:"stock_count"`
+		CacheStatus    string `json:"cache_status"`
+		MaxStalenessMS int64  `json:"max_staleness_ms"`
+	}
+)
+
+service bookstore-api {
+	@handler ResendVerificationHandler
+	post /api/auth/resend-verification (ResendVerificationReq) returns (ResendVerificationResp)
+
+	@handler RegisterHandler
+	post /api/auth/register (RegisterReq) returns (RegisterResp)
+
+	@handler VerifyEmailHandler
+	post /api/auth/verify-email (VerifyEmailReq) returns (VerifyEmailResp)
+
+	@handler LoginHandler
+	post /api/auth/login (LoginReq) returns (LoginResp)
+
+	@handler ListOrdersHandler
+	get /api/orders (ListOrdersReq) returns (ListOrdersResp)
+
+	@handler GetOrderHandler
+	get /api/orders/:order_id (GetOrderReq) returns (OrderRecord)
+
+	@handler AddBookHandler
+	post /api/books (AddBookReq) returns (AddBookResp)
+
+	@handler GetBookHandler
+	get /api/books/:book (GetBookReq) returns (GetBookResp)
+
+	@handler SearchBooksHandler
+	get /api/books/search (SearchBooksReq) returns (SearchBooksResp)
+
+	@handler UpdateBookHandler
+	put /api/books/:book (UpdateBookReq) returns (UpdateBookResp)
+
+	@handler DeleteBookHandler
+	delete /api/books/:book (DeleteBookReq) returns (DeleteBookResp)
+
+	@handler DeductStockHandler
+	post /api/books/:book_id/stock/deduct (DeductStockReq) returns (DeductStockResp)
+
+	@handler GetHotBookHandler
+	get /api/hot-books/:book_id (HotBookReq) returns (HotBookResp)
+}
+
+type ResendVerificationReq {}
+type ResendVerificationResp {
+	Status string `json:"status"`
+	VerificationEmailSent bool `json:"verification_email_sent"`
+	RetryAfterSeconds int64 `json:"retry_after_seconds"`
+}

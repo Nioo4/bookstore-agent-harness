@@ -1,0 +1,67 @@
+schema_version: v1
+prompt_sets:
+  - version: v1
+    prompts:
+      - role: catalog
+        path: prompts/v1/catalog.md
+        sha256: 38dd180e0bada48a23f6242a580f580a987bda2d185bf174b47efe687cc498f4
+      - role: knowledge
+        path: prompts/v1/knowledge.md
+        sha256: 57fc1fbbba3df36d3a003d3e3f6ada89b1673ce1863544fe685b2d3ffb7d7e5b
+      - role: order
+        path: prompts/v1/order.md
+        sha256: b8dee2d75b7a51c5342231bd59e73012272e74a4a9884fef37a2e92f4b33b61e
+      - role: recommendation
+        path: prompts/v1/recommendation.md
+        sha256: 60fe2a4d15537aa2b795784d3eb99db6663a5654aa8d42df17d8ab8049b6d903
+      - role: router
+        path: prompts/v1/router.md
+        sha256: f598dc425d3d53814fb1dd7fa755216f79e034a148776466cae3b22d1c7e009e
+      - role: verifier
+        path: prompts/v1/verifier.md
+        sha256: 61787a88265a95d9150e8880d6a8df1def94c9b15db5d057605f4194822f4539
+  - version: recommendation-v1
+    prompts:
+      - role: judge
+        path: evals/judges/recommendation-v1.md
+        sha256: 6d30d3e51963c32a2e599b2a66f7a1e0fc7d0eb0f5d0fbca8ca2e3949692de72
+  - version: v2-deepseek-json
+    prompts:
+      - role: catalog
+        path: prompts/v2-deepseek-json/catalog.md
+        sha256: 24d35c21c7297c346f52dcf653db5d698d87a9fc5c780ddc6d65b43fd854b75d
+      - role: knowledge
+        path: prompts/v2-deepseek-json/knowledge.md
+        sha256: 62512133aea5ec53c81c9618c49b339550973362f807026b23bd1a2f6b2e26e6
+      - role: order
+        path: prompts/v2-deepseek-json/order.md
+        sha256: 9acde3284289e38475204fb68a85b3248356ae39a6d8daace6e006a2cadbc9d4
+      - role: recommendation
+        path: prompts/v2-deepseek-json/recommendation.md
+        sha256: 9426b29f4d30048ebcb4fd529ba7174486329e1cb18fb7c9a3a6a6a8822bca2f
+      - role: router
+        path: prompts/v2-deepseek-json/router.md
+        sha256: 795766ef6289a563a35d8704c9060730f3df01e5fe822cd58fe553c7487b10e6
+      - role: verifier
+        path: prompts/v2-deepseek-json/verifier.md
+        sha256: cf608108cb20c44d3b68a316e3f4ebd3671ed5c2f52fe6d1ce34d245bcac1ba2
+  - version: v3-evidence-grounded
+    prompts:
+      - role: catalog
+        path: prompts/v2-deepseek-json/catalog.md
+        sha256: 24d35c21c7297c346f52dcf653db5d698d87a9fc5c780ddc6d65b43fd854b75d
+      - role: knowledge
+        path: prompts/v2-deepseek-json/knowledge.md
+        sha256: 62512133aea5ec53c81c9618c49b339550973362f807026b23bd1a2f6b2e26e6
+      - role: order
+        path: prompts/v2-deepseek-json/order.md
+        sha256: 9acde3284289e38475204fb68a85b3248356ae39a6d8daace6e006a2cadbc9d4
+      - role: recommendation
+        path: prompts/v2-deepseek-json/recommendation.md
+        sha256: 9426b29f4d30048ebcb4fd529ba7174486329e1cb18fb7c9a3a6a6a8822bca2f
+      - role: router
+        path: prompts/v2-deepseek-json/router.md
+        sha256: 795766ef6289a563a35d8704c9060730f3df01e5fe822cd58fe553c7487b10e6
+      - role: verifier
+        path: prompts/v3-evidence-grounded/verifier.md
+        sha256: aeceb2dd347e205ca0196f77a3469081d8bbc0cd5ad5fa9994472b12bda6346c

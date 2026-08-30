@@ -1,0 +1,27 @@
+.git
+.env
+.env.*
+**/.env
+**/.venv
+**/node_modules
+**/.next
+**/__pycache__
+**/.pytest_cache
+**/test-results
+**/playwright-report
+.workcache
+.workbuddy
+reports
+agent/evals/reports
+deploy/keys
+*.log
+*.exe
+**/*.exe
+**/.env.*
+**/.coverage
+# Local Go configs may contain credentials; only deploy/config enters images.
+api/etc
+rpc/*/etc/*.yaml
+rpc/*/etc/*.yml
+**/*.pem
+**/*.key

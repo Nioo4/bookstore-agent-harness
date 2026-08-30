@@ -1,0 +1,19 @@
+{
+  "schema_version": "v1",
+  "pricing_version": "pricing-v1",
+  "effective_at": "2026-08-27T00:00:00Z",
+  "models": {
+    "priced-model": {
+      "input_microusd_per_million": 1000000,
+      "output_microusd_per_million": 2000000,
+      "cached_microusd_per_million": 500000,
+      "reasoning_microusd_per_million": 3000000
+    },
+    "partial-model": {
+      "input_microusd_per_million": 1000000,
+      "output_microusd_per_million": 2000000,
+      "cached_microusd_per_million": null,
+      "reasoning_microusd_per_million": null
+    }
+  }
+}
