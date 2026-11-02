@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/netip"
 	"strings"
+	"time"
 
 	"bookstore/api/internal/logic"
 	"bookstore/api/internal/svc"
@@ -52,6 +53,69 @@ func VerifyEmailHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	}
 }
 
+const accessCookieName = "bookstore_access"
+
+// accessTokenFromRequest centralizes the public browser contract. V2 accepts
+// identity only from the HttpOnly access cookie; a caller-provided
+// Authorization header must never replace a missing, duplicate or invalid
+// cookie. Server-to-server Bearer conversion happens only after BFF
+// verification in the proxy/RPC boundary.
+func accessTokenFromRequest(r *http.Request) string {
+	token, present := browserAccessCookie(r)
+	if !present {
+		return ""
+	}
+	return token
+}
+
+func setAccessCookie(w http.ResponseWriter, secure bool, token string, expiresIn int64) {
+	maxAge := 0
+	if expiresIn < 0 {
+		maxAge = -1
+	} else if expiresIn > 0 {
+		maxAge = int(expiresIn)
+	}
+	cookie := &http.Cookie{
+		Name:     accessCookieName,
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   secure,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   maxAge,
+	}
+	if maxAge < 0 {
+		cookie.Expires = time.Unix(1, 0).UTC()
+	} else if maxAge > 0 {
+		cookie.Expires = time.Now().Add(time.Duration(maxAge) * time.Second).UTC()
+	}
+	http.SetCookie(w, cookie)
+}
+
+func SessionHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		resp := types.SessionResp{Authenticated: false, User: nil}
+		if svcCtx.AuthVerifier != nil {
+			if token := accessTokenFromRequest(r); token != "" {
+				if identity, err := svcCtx.AuthVerifier.Verify(token); err == nil {
+					resp.Authenticated = true
+					resp.User = &types.SessionUser{DisplayName: identity.DisplayName, EmailVerified: identity.EmailVerified}
+				}
+			}
+		}
+		httpx.OkJsonCtx(r.Context(), w, resp)
+	}
+}
+
+func LogoutHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		setAccessCookie(w, svcCtx.Config.CookieSecure, "", -1)
+		httpx.OkJsonCtx(r.Context(), w, types.LogoutResp{Ok: true})
+	}
+}
+
 func LoginHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
@@ -65,6 +129,7 @@ func LoginHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 			writeRPCError(w, r, err)
 			return
 		}
+		setAccessCookie(w, svcCtx.Config.CookieSecure, resp.AccessToken, resp.ExpiresIn)
 		httpx.OkJsonCtx(r.Context(), w, resp)
 	}
 }
@@ -101,16 +166,16 @@ func ResendVerificationHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 			writeAPIError(w, r, http.StatusBadRequest, "INVALID_ARGUMENT", "request must be an empty JSON object without query parameters", false)
 			return
 		}
-		header := r.Header.Get("Authorization")
-		if svcCtx.AuthVerifier == nil || !strings.HasPrefix(header, "Bearer ") {
+		token := accessTokenFromRequest(r)
+		if svcCtx.AuthVerifier == nil || token == "" {
 			writeAPIError(w, r, http.StatusUnauthorized, "AUTH_REQUIRED", "authentication required", false)
 			return
 		}
-		if _, err := svcCtx.AuthVerifier.Verify(header); err != nil {
+		if _, err := svcCtx.AuthVerifier.Verify(token); err != nil {
 			writeAPIError(w, r, http.StatusUnauthorized, "AUTH_REQUIRED", "authentication required", false)
 			return
 		}
-		resp, err := svcCtx.Authenticator.ResendVerification(r.Context(), &authenticator.ResendVerificationReq{AccessToken: strings.TrimSpace(strings.TrimPrefix(header, "Bearer ")), ClientIp: clientIP(r, svcCtx.Config.TrustedProxyCIDRs)})
+		resp, err := svcCtx.Authenticator.ResendVerification(r.Context(), &authenticator.ResendVerificationReq{AccessToken: token, ClientIp: clientIP(r, svcCtx.Config.TrustedProxyCIDRs)})
 		if err != nil {
 			writeRPCError(w, r, err)
 			return

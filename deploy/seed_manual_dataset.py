@@ -4,13 +4,14 @@ from __future__ import annotations
 import argparse
 from datetime import date
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
 DATASET = ROOT / "deploy/datasets/manual-v1.json"
-PROJECT = "bookstore-live-local"
+PROJECT = os.environ.get("COMPOSE_PROJECT_NAME", "bookstore")
 CONTAINER = PROJECT + "-mysql-1"
 
 
@@ -137,9 +138,15 @@ def build_insert_sql(data: dict, existing: dict) -> str:
 
 
 def main() -> None:
+    global PROJECT, CONTAINER
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--apply", action="store_true", help="Insert missing ISBNs into this checkout's bookstore-live-local only")
+    parser.add_argument("--project", default=PROJECT, help="Exact Docker Compose project name (default: COMPOSE_PROJECT_NAME or bookstore)")
+    parser.add_argument("--apply", action="store_true", help="Insert missing ISBNs into the verified local Compose project")
     args = parser.parse_args()
+    if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,62}", args.project):
+        raise ValueError("INVALID_COMPOSE_PROJECT")
+    PROJECT = args.project
+    CONTAINER = PROJECT + "-mysql-1"
     data = load_dataset()
     verify_target()
     before = snapshot(data)

@@ -1,0 +1,26 @@
+Name: auth.rpc
+ListenOn: 0.0.0.0:8082
+Etcd:
+  Hosts:
+    - 127.0.0.1:2379
+  Key: auth.rpc
+DataSource: bookstore:change-me@tcp(127.0.0.1:3306)/gozero?charset=utf8mb4&parseTime=true&loc=UTC
+BusinessRedis:
+  Address: 127.0.0.1:6379
+  Password: ""
+  DB: 0
+JWT:
+  PrivateKeyPath: ./deploy/keys/jwt-private.pem
+  PublicKeyPath: ./deploy/keys/jwt-public.pem
+  Issuer: bookstore
+SMTP:
+  Host: 127.0.0.1
+  Port: 1025
+  Username: ""
+  Password: ""
+  From: no-reply@bookstore.local
+AppBaseURL: http://127.0.0.1:3000
+RateLimit:
+  RegisterLimit: 5
+  LoginLimit: 10
+  Window: 15m

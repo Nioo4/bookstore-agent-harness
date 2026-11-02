@@ -44,6 +44,10 @@ class OwnedEpisode(BaseModel):
 
 
 class MemoryRepository(Protocol):
+    async def upsert_preference(
+        self, user_id: int, key: str, value: str
+    ) -> tuple[MemoryRecord, bool]: ...
+
     async def apply(
         self,
         user_id: int,
@@ -97,6 +101,74 @@ class AsyncMySQLMemoryRepository:
     async def aclose(self) -> None:
         self._pool.close()
         await self._pool.wait_closed()
+
+    async def upsert_preference(
+        self, user_id: int, key: str, value: str
+    ) -> tuple[MemoryRecord, bool]:
+        """Persist one explicit v2 preference without invoking the extractor.
+
+        The existing schema stores a JSON object and uses UUID memory IDs.  The
+        v2 API deliberately keeps that storage contract: ``key`` is the
+        stable preference key and the value is wrapped as ``{"value": ...}``.
+        No vector outbox is emitted because v2 preferences are read
+        structurally, not embedded.
+        """
+        try:
+            async with self._pool.acquire() as connection:
+                await connection.begin()
+                try:
+                    async with connection.cursor(DictCursor) as cursor:
+                        await cursor.execute(
+                            "SELECT * FROM user_memory WHERE user_id=%s AND memory_key=%s "
+                            "AND status='ACTIVE' AND active_slot=1 LIMIT 1 FOR UPDATE",
+                            (user_id, key),
+                        )
+                        active = await cursor.fetchone()
+                        payload = {"value": value}
+                        if active is not None and _json_value(active["value_json"]) == payload:
+                            await connection.commit()
+                            return _record(active), False
+
+                        memory_id = str(uuid.uuid4())
+                        if active is not None:
+                            await cursor.execute(
+                                "UPDATE user_memory SET status='SUPERSEDED', active_slot=NULL, "
+                                "updated_at=UTC_TIMESTAMP(3) WHERE memory_id=%s AND user_id=%s "
+                                "AND status='ACTIVE'",
+                                (active["memory_id"], user_id),
+                            )
+                        await cursor.execute(
+                            "INSERT INTO user_memory "
+                            "(memory_id,user_id,memory_type,memory_key,value_json,source,confidence,"
+                            "source_conversation_id,source_message_id,write_idempotency_key,status,active_slot,vector_status) "
+                            "VALUES (%s,%s,'PREFERENCE',%s,%s,'EXPLICIT',1.0,NULL,NULL,%s,'ACTIVE',1,'NONE')",
+                            # A deleted preference may be created again.  Do
+                            # not reuse a user+key write token across distinct
+                            # records; identical active writes are already
+                            # handled by the locked value comparison above.
+                            (memory_id, user_id, key, canonical_json(payload),
+                             "v2-preference:" + memory_id),
+                        )
+                        if active is not None:
+                            await cursor.execute(
+                                "UPDATE user_memory SET superseded_by_memory_id=%s "
+                                "WHERE memory_id=%s AND user_id=%s",
+                                (memory_id, active["memory_id"], user_id),
+                            )
+                        await cursor.execute(
+                            "SELECT * FROM user_memory WHERE memory_id=%s AND user_id=%s",
+                            (memory_id, user_id),
+                        )
+                        inserted = await cursor.fetchone()
+                    await connection.commit()
+                    return _record(inserted), True
+                except Exception:
+                    await connection.rollback()
+                    raise
+        except (MemoryNotFound, MemoryDependencyUnavailable):
+            raise
+        except Exception as exc:
+            raise MemoryDependencyUnavailable("preference write failed") from exc
 
     async def apply(
         self,

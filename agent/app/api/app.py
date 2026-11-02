@@ -9,7 +9,6 @@ from fastapi import FastAPI, Header, Query, Request
 from pydantic import ValidationError
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from app.agents.registry import AgentRegistry
 from app.api.auth import AccessTokenVerifier
 from app.api.chat import ChatEvent, ChatMessageRequest, ChatService
 from app.api.confirmation import ConfirmationDecision, ConfirmationService
@@ -32,8 +31,10 @@ from starlette.responses import Response
 @dataclass(frozen=True)
 class AppDependencies:
     model_provider: ModelProvider
-    agents: AgentRegistry
     tools: ToolRegistry
+    # Compatibility-only value accepted by old fixtures; v2 production wiring
+    # never reads it and registers one SingleAgentRuntime instead.
+    agents: Any | None = None
     closeables: tuple[Any, ...] = ()
     startup_hooks: tuple[Any, ...] = ()
     token_verifier: AccessTokenVerifier | None = None
@@ -64,7 +65,12 @@ def create_app(dependencies: AppDependencies) -> FastAPI:
     if dependencies.trace_service is not None and dependencies.token_verifier is not None:
         from app.api.traces import build_trace_router
 
-        app.include_router(build_trace_router(dependencies.trace_service, dependencies.token_verifier))
+        app.include_router(
+            build_trace_router(
+                dependencies.trace_service,
+                dependencies.token_verifier,
+            )
+        )
 
     @app.get("/healthz", tags=["system"])
     async def health() -> dict[str, str]:
@@ -268,6 +274,46 @@ def create_app(dependencies: AppDependencies) -> FastAPI:
             )
         except MemoryDependencyUnavailable:
             return _error(503, "MEMORY_DEPENDENCY_UNAVAILABLE", "memory dependency is unavailable", True)
+
+    @app.post("/api/memories/preferences", tags=["memory"])
+    async def upsert_preference(
+        request: Request,
+        authorization: str | None = Header(default=None),
+    ):
+        authenticated = _memory_user(dependencies, authorization)
+        if isinstance(authenticated, JSONResponse):
+            return authenticated
+        try:
+            body = await request.json()
+        except Exception:
+            return _error(400, "INVALID_REQUEST", "invalid JSON request body", False)
+        if not isinstance(body, dict) or set(body) != {"key", "value"}:
+            return _error(422, "MEMORY_VALUE_INVALID", "preference body must contain key and value", False)
+        key, value = body.get("key"), body.get("value")
+        if not isinstance(key, str) or not isinstance(value, str):
+            return _error(422, "MEMORY_VALUE_INVALID", "preference key and value must be strings", False)
+        try:
+            record, created = await dependencies.memory_service.upsert_preference(  # type: ignore[union-attr]
+                authenticated.user_id, key, value
+            )
+            stored_value = record.value.get("value") if isinstance(record.value, dict) else record.value
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "memory_id": record.memory_id,
+                    "key": record.memory_key,
+                    "value": stored_value,
+                    "created": created,
+                    "updated_at": record.updated_at.isoformat(),
+                },
+            )
+        except Exception as exc:
+            from app.memory.errors import MemoryKeyUnsupported, MemoryValueInvalid
+            if isinstance(exc, (MemoryKeyUnsupported, MemoryValueInvalid)):
+                return _error(422, "MEMORY_VALUE_INVALID", str(exc), False)
+            if isinstance(exc, MemoryDependencyUnavailable):
+                return _error(503, "MEMORY_DEPENDENCY_UNAVAILABLE", "memory dependency is unavailable", True)
+            raise
 
     @app.delete("/api/memories/{memory_id}", tags=["memory"])
     async def delete_memory(memory_id: str, authorization: str | None = Header(default=None)):

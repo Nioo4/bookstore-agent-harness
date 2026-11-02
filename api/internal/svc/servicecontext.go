@@ -4,6 +4,7 @@
 package svc
 
 import (
+	"bookstore/api/internal/agentproxy"
 	"bookstore/api/internal/config"
 	"bookstore/api/internal/hotcache"
 	"bookstore/rpc/add/client/adder"
@@ -31,9 +32,29 @@ type ServiceContext struct {
 	StockRateLimiter RateLimiter
 	HotBookCache     *hotcache.Cache
 	AuthVerifier     *jwtauth.Verifier
+	AgentProxy       *agentproxy.Proxy
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
+	return newServiceContext(c,
+		adder.NewAdder(zrpc.MustNewClient(c.Add)),
+		checker.NewChecker(zrpc.MustNewClient(c.Check)),
+		authenticator.NewAuthenticator(zrpc.MustNewClient(c.Auth)),
+		orderservice.NewOrderService(zrpc.MustNewClient(c.Order)),
+	)
+}
+
+// NewInProcessServiceContext keeps the HTTP API on the same process as the
+// business modules. The generated RPC-shaped interfaces are retained so the
+// existing handlers and compatibility tests do not change, while the
+// adapters supplied by rpc/*/service avoid a network hop and etcd.
+func NewInProcessServiceContext(c config.Config, a adder.Adder, ch checker.Checker,
+	auth authenticator.Authenticator, orders orderservice.OrderService) *ServiceContext {
+	return newServiceContext(c, a, ch, auth, orders)
+}
+
+func newServiceContext(c config.Config, a adder.Adder, ch checker.Checker,
+	auth authenticator.Authenticator, orders orderservice.OrderService) *ServiceContext {
 	if err := c.AuthBudget.Validate(); err != nil {
 		panic(err)
 	}
@@ -46,6 +67,15 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	if err != nil {
 		panic("authentication verifier configuration invalid")
 	}
+	agentURL := c.AgentAPIURL
+	if agentURL == "" {
+		agentURL = agentproxy.DefaultBaseURL
+	}
+	proxy, err := agentproxy.New(agentURL)
+	if err != nil {
+		panic("agent API URL configuration invalid")
+	}
+	c.AgentAPIURL = agentURL
 	c.Auth.Timeout = c.AuthBudget.RPC.Milliseconds()
 	var stockRateLimiter RateLimiter
 	if c.StockRateLimit.Enabled {
@@ -58,10 +88,11 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	return &ServiceContext{
 		Config:           c,
 		AuthVerifier:     verifier,
-		Adder:            adder.NewAdder(zrpc.MustNewClient(c.Add)),
-		Checker:          checker.NewChecker(zrpc.MustNewClient(c.Check)),
-		Authenticator:    authenticator.NewAuthenticator(zrpc.MustNewClient(c.Auth)),
-		Orders:           orderservice.NewOrderService(zrpc.MustNewClient(c.Order)),
+		AgentProxy:       proxy,
+		Adder:            a,
+		Checker:          ch,
+		Authenticator:    auth,
+		Orders:           orders,
 		StockRateLimiter: stockRateLimiter,
 		HotBookCache:     hotcache.MustNew(c.HotCache.Enabled, c.HotCache.TTL, c.HotCache.Limit),
 	}

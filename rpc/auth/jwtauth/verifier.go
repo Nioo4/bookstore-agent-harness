@@ -18,11 +18,13 @@ var ErrInvalidToken = errors.New("invalid access token")
 type UserContext struct {
 	UserID        int64
 	Email         string
+	DisplayName   string
 	EmailVerified bool
 }
 
 type claims struct {
 	Email         string `json:"email"`
+	DisplayName   string `json:"display_name"`
 	EmailVerified bool   `json:"email_verified"`
 	jwt.RegisteredClaims
 }
@@ -81,5 +83,5 @@ func (v *Verifier) Verify(raw string) (UserContext, error) {
 	if err != nil || userID <= 0 {
 		return UserContext{}, ErrInvalidToken
 	}
-	return UserContext{UserID: userID, Email: parsedClaims.Email, EmailVerified: parsedClaims.EmailVerified}, nil
+	return UserContext{UserID: userID, Email: parsedClaims.Email, DisplayName: parsedClaims.DisplayName, EmailVerified: parsedClaims.EmailVerified}, nil
 }

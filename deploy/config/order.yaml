@@ -5,9 +5,6 @@ Mode: pro
 Log:
   Mode: console
   Level: error
-Etcd:
-  Hosts: [etcd:2379]
-  Key: order.rpc
 DataSource: "${MYSQL_DSN}"
 BusinessRedis:
   Address: redis:6379
@@ -24,7 +21,7 @@ Prometheus:
   Port: 9105
   Path: /metrics
 Telemetry:
-  Name: bookstore-order-rpc
-  Endpoint: otel-collector:4317
+  Name: bookstore-service-order
+  Endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT}
   Sampler: 1.0
   Batcher: otlpgrpc

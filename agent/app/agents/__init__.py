@@ -1,3 +1,6 @@
-from app.agents.registry import AgentRegistry, AgentSpec, build_agent_registry
+"""Domain schemas used by the v2 single-agent runtime.
 
-__all__ = ["AgentRegistry", "AgentSpec", "build_agent_registry"]
+The retired multi-agent registry remains importable only by historical
+offline modules; importing this package must not load that registry into the
+production Agent API.
+"""

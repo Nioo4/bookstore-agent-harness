@@ -12,6 +12,7 @@ from app.tools.schemas import (
     GetOrderInput,
     ListMyOrdersInput,
     PrepareOrderInput,
+    PrepareOrderRequest,
     SearchBooksInput,
 )
 
@@ -23,7 +24,7 @@ class CatalogClient(Protocol):
 
 
 class OrderClient(Protocol):
-    async def prepare_order(self, request: PrepareOrderInput, access_token: str, conversation_id: str, timeout: float) -> dict[str, Any]: ...
+    async def prepare_order(self, request: PrepareOrderRequest, access_token: str, conversation_id: str, timeout: float) -> dict[str, Any]: ...
 
     async def create_order(self, request: CreateOrderInput, access_token: str, conversation_id: str, timeout: float) -> dict[str, Any]: ...
 
@@ -189,7 +190,7 @@ class GrpcOrderClient:
         return self._stub
 
     @traced("rpc.order.prepare")
-    async def prepare_order(self, request: PrepareOrderInput, access_token: str, conversation_id: str, timeout: float) -> dict[str, Any]:
+    async def prepare_order(self, request: PrepareOrderRequest, access_token: str, conversation_id: str, timeout: float) -> dict[str, Any]:
         from rpc.order import bookstore_order_pb2
 
         message = bookstore_order_pb2.prepareOrderReq(

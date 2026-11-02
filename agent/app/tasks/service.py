@@ -5,15 +5,12 @@ import hashlib
 import json
 import uuid
 from datetime import UTC, datetime, timedelta
-from typing import Callable
+from typing import Any, Callable
 
 from app.api.auth import AuthUser
 from app.api.conversations import ConversationNotFound, ConversationStore
 from app.tasks.errors import TaskDependencyUnavailable, TaskError
-from app.tasks.graph import InventoryWatchRuntime
-from app.tasks.repository import TaskRepository
-from app.tasks.types import AgentTask, CheckpointStatus, InventoryWatchRequest, TaskStatus
-from app.tasks.trace import InventoryWatchTrace
+from app.tasks.types import AgentTask, InventoryWatchRequest, TaskStatus
 from app.tools.clients import CatalogClient
 from app.tools.errors import ToolError
 from app.tools.schemas import GetBookInput
@@ -22,24 +19,20 @@ from app.tools.schemas import GetBookInput
 class TaskService:
     def __init__(
         self,
-        repository: TaskRepository,
+        repository: Any,
         conversations: ConversationStore,
         catalog: CatalogClient,
-        graph: InventoryWatchRuntime,
         *,
         now: Callable[[], datetime] | None = None,
         default_ttl: timedelta = timedelta(days=30),
         max_ttl: timedelta = timedelta(days=90),
-        trace: InventoryWatchTrace | None = None,
     ) -> None:
         self.repository = repository
         self.conversations = conversations
         self.catalog = catalog
-        self.graph = graph
         self.now = now or (lambda: datetime.now(UTC))
         self.default_ttl = default_ttl
         self.max_ttl = max_ttl
-        self.trace = trace
 
     async def create(
         self,
@@ -63,10 +56,6 @@ class TaskService:
         if existing is not None:
             if existing.request_hash != request_hash:
                 raise TaskError("IDEMPOTENCY_CONFLICT", "idempotency key conflicts with another request")
-            recorder = await self._start_trace(existing)
-            existing = await self._ensure_checkpoint(existing)
-            existing = await self._reconcile(existing)
-            await self._sync_trace(recorder, existing)
             return existing, True
         expires_at = explicit_expiry or now + self.default_ttl
         if expires_at < now + timedelta(hours=1) or expires_at > now + self.max_ttl:
@@ -97,16 +86,11 @@ class TaskService:
             last_seen_available_stock=available,
             create_idempotency_key=idempotency_key,
             request_hash=request_hash,
-            checkpoint_status=CheckpointStatus.PENDING,
             expires_at=expires_at,
             created_at=now,
             updated_at=now,
         )
         task, replayed = await self.repository.create(task)
-        recorder = await self._start_trace(task)
-        task = await self._ensure_checkpoint(task)
-        task = await self._reconcile(task)
-        await self._sync_trace(recorder, task)
         return task, replayed
 
     async def list_tasks(self, user_id: int, task_type: str | None, status: TaskStatus | None) -> list[AgentTask]:
@@ -123,16 +107,6 @@ class TaskService:
 
     async def cancel(self, user_id: int, task_id: str) -> tuple[AgentTask, bool]:
         task, replayed = await self.repository.cancel(user_id, task_id, self.now().astimezone(UTC))
-        if not replayed:
-            try:
-                await self.graph.finish(task, {"kind": "TaskCancelledEvent", "task_id": task.task_id})
-            except Exception:
-                await self.repository.mark_checkpoint(task.task_id, CheckpointStatus.FAILED)
-            if self.trace is not None:
-                await self.trace.terminal(
-                    task,
-                    {"kind": "TaskCancelledEvent", "task_id": task.task_id},
-                )
         return task, replayed
 
     async def list_notifications(self, user_id: int, unread_only: bool):
@@ -144,68 +118,6 @@ class TaskService:
 
     async def read_notification(self, user_id: int, notification_id: str):
         return await self.repository.read_notification(user_id, notification_id, self.now().astimezone(UTC))
-
-    async def _ensure_checkpoint(self, task: AgentTask) -> AgentTask:
-        if task.checkpoint_status is CheckpointStatus.READY:
-            return task
-        try:
-            await self.graph.ensure_waiting(task)
-            return await self.repository.mark_checkpoint(task.task_id, CheckpointStatus.READY)
-        except Exception as exc:
-            await self.repository.mark_checkpoint(task.task_id, CheckpointStatus.FAILED)
-            raise TaskDependencyUnavailable("inventory watch checkpoint is unavailable") from exc
-
-    async def _reconcile(self, task: AgentTask) -> AgentTask:
-        try:
-            current = await self.catalog.get_book(GetBookInput(book_id=task.book_id), timeout=3.0)
-        except Exception as exc:
-            raise TaskDependencyUnavailable("catalog recheck is unavailable") from exc
-        task = await self.repository.reconcile_after_create(
-            task,
-            int(current["available_stock"]),
-            int(current["version"]),
-            self.now().astimezone(UTC),
-        )
-        if task.status is TaskStatus.TRIGGERED:
-            try:
-                await self.graph.finish(
-                    task,
-                    {
-                        "kind": "InventoryStockEvent",
-                        "event_id": task.trigger_event_id,
-                        "book_id": task.book_id,
-                        "available_stock": task.last_seen_available_stock,
-                        "inventory_version": task.last_seen_inventory_version,
-                    },
-                )
-                task = await self.repository.finalize_triggered_task(task.task_id, self.now().astimezone(UTC))
-            except Exception as exc:
-                raise TaskDependencyUnavailable("inventory watch finalize is unavailable") from exc
-        return task
-
-    async def _start_trace(self, task: AgentTask):
-        if self.trace is None:
-            return None
-        try:
-            return await self.trace.start_or_attach(task)
-        except Exception as exc:
-            raise TaskError(
-                "TRACE_DEPENDENCY_UNAVAILABLE",
-                "initial inventory-watch Trace could not be created",
-                retryable=True,
-            ) from exc
-
-    async def _sync_trace(self, recorder, task: AgentTask) -> None:
-        if self.trace is None or recorder is None:
-            return
-        if task.status is TaskStatus.ACTIVE:
-            await self.trace.waiting(recorder, task)
-            return
-        if task.status in {TaskStatus.COMPLETED, TaskStatus.CANCELLED, TaskStatus.EXPIRED}:
-            await self.trace.terminal(
-                task,
-                {"kind": f"Task{task.status.value.title()}Event", "task_id": task.task_id},
-            )
 
     def _normalized_request(self, request: InventoryWatchRequest) -> tuple[datetime | None, bytes]:
         if request.expires_at is None:

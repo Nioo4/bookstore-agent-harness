@@ -1,0 +1,27 @@
+Name: check.rpc
+ListenOn: 127.0.0.1:8081
+Timeout: 800
+CpuThreshold: 800
+Middlewares:
+  Breaker: true
+Prometheus:
+  Host: 0.0.0.0
+  Port: 9103
+  Path: /metrics
+Telemetry:
+  Name: bookstore-check-rpc
+  Endpoint: 127.0.0.1:4317
+  Sampler: 1.0
+  Batcher: otlpgrpc
+Etcd:
+  Hosts:
+    - 127.0.0.1:2379
+  Key: check.rpc
+DataSource: "root:CHANGE_ME@tcp(127.0.0.1:3306)/gozero?charset=utf8mb4&parseTime=true&loc=Local"
+Table: book
+Cache:
+  - Host: 127.0.0.1:6379
+CacheFallback:
+  CacheTimeout: 250ms
+  MaxConcurrent: 32
+

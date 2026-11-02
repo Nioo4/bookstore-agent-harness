@@ -1,4 +1,4 @@
-"""Application-level Agent Trace, replay, and evaluation boundaries."""
+"""Application-level Agent Trace boundaries and historical compatibility."""
 
 from app.trace.safety import SafeProjection, TraceSafetyProjector
 from app.trace.types import TraceRun, TraceStep

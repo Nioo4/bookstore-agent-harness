@@ -1,0 +1,15 @@
+Name: order.rpc
+ListenOn: 0.0.0.0:8083
+Etcd:
+  Hosts:
+    - 127.0.0.1:2379
+  Key: order.rpc
+DataSource: bookstore:change-me@tcp(127.0.0.1:3306)/gozero?charset=utf8mb4&parseTime=true&loc=UTC
+BusinessRedis:
+  Address: 127.0.0.1:6379
+  Password: ""
+  DB: 0
+JWT:
+  PublicKeyPath: ./deploy/keys/jwt-public.pem
+  Issuer: bookstore
+ConfirmationTTL: 10m

@@ -1,0 +1,67 @@
+# V2 fixture-only overlay. It replaces model/embedding HTTP calls only; it never
+# changes the default Compose model gateway or adds a deprecated runtime service.
+x-test-model: &test-model
+  MODEL_BASE_URL: http://model-fixture:8010/v1
+  MODEL_API_KEY: local-e2e-fixture-not-a-provider-secret
+  MODEL_ADAPTER: openai-json-schema-v1
+  MODEL_PROFILE: deterministic-fake-v2
+  PROMPT_SET_VERSION: v4-single-agent-rag
+  AGENT_MODEL: deterministic-fake-v2
+  MODEL_MAX_OUTPUT_TOKENS: 8192
+  MODEL_TIMEOUT: 30s
+  EMBEDDING_BASE_URL: http://model-fixture:8010/v1
+  EMBEDDING_API_KEY: local-e2e-embedding-not-a-provider-secret
+  EMBEDDING_MODEL: fixture-embedding
+  EMBEDDING_DIMENSIONS: 32
+  EMBEDDING_BATCH_SIZE: 20
+  EMBEDDING_TIMEOUT: 30s
+  POLICY_COLLECTION_ALIAS: bookstore_policy_fixture_32_current
+  BOOK_COLLECTION_ALIAS: bookstore_book_fixture_32_current
+  ENVIRONMENT: test
+
+services:
+  bookstore-service:
+    environment:
+      APP_BASE_URL: http://127.0.0.1:8088
+      TRUSTED_PROXY_CIDRS: 172.31.241.20/32
+
+  nginx:
+    profiles: [v2-app]
+    environment:
+      APP_BASE_URL: http://127.0.0.1:8088
+    networks:
+      bookstore:
+        ipv4_address: 172.31.241.20
+
+  model-fixture:
+    image: bookstore-agent:local
+    command: [python, -m, uvicorn, model_fixture:app, --app-dir, /app/deploy, --host, 0.0.0.0, --port, "8010", --no-access-log]
+    networks: [bookstore]
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8010/healthz')"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  agent-api:
+    # The API cannot pass its startup audit until the explicit RAG build has
+    # written the shared manifest.  Keep it out of an unqualified `up` so a
+    # clean fixture project cannot fail before the documented second phase.
+    profiles: [v2-app]
+    environment:
+      <<: *test-model
+    depends_on:
+      model-fixture: {condition: service_healthy}
+
+  agent-worker:
+    profiles: [v2-app]
+
+networks:
+  # Keep the fixture project isolated from the default Compose network used by
+  # a live local project.  The base file's trusted-proxy CIDR is overridden
+  # above to match this test-only Nginx address.
+  bookstore:
+    ipam:
+      config:
+        - subnet: 172.31.241.0/24
+          ip_range: 172.31.241.128/25

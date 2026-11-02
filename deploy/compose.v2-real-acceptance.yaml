@@ -1,0 +1,22 @@
+# Local acceptance-only overlay. It reuses the isolated v2 fixture project's
+# infrastructure and data while switching Agent API to configured real
+# providers and the separately built 1024-dimensional acceptance RAG aliases.
+# Secrets remain supplied by the operator environment/.env and are never
+# embedded in this file.
+services:
+  agent-api:
+    environment:
+      ENVIRONMENT: development
+      MODEL_BASE_URL: ${MODEL_BASE_URL:?configure model gateway}
+      MODEL_API_KEY: ${MODEL_API_KEY:?configure model gateway key}
+      MODEL_ADAPTER: ${MODEL_ADAPTER:-deepseek-chat-json-v1}
+      MODEL_PROFILE: ${MODEL_PROFILE:-deepseek-flash-v2}
+      AGENT_MODEL: ${AGENT_MODEL:-deepseek-v4-flash}
+      EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:?configure embedding gateway}
+      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:?configure embedding gateway key}
+      EMBEDDING_MODEL: qwen3.7-text-embedding
+      EMBEDDING_DIMENSIONS: 1024
+      POLICY_COLLECTION_ALIAS: bookstore_policy_real_v3
+      BOOK_COLLECTION_ALIAS: bookstore_book_real_v3
+      RAG_INDEX_MANIFEST_PATH: runtime/rag-index-manifest-real-v3.json
+      PROMPT_SET_VERSION: v4.2-single-agent-rag

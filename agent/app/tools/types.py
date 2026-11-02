@@ -46,6 +46,10 @@ class ToolContext(BaseModel):
     email_verified: bool = False
     user_confirmed: bool = False
     guest_mode: bool = False
+    catalog_evidence_book_ids: frozenset[int] = Field(default_factory=frozenset)
+    # Code-owned hard filters recovered from the current user request.  The
+    # model cannot relax these when constructing a Catalog tool call.
+    explicit_constraints: dict[str, Any] = Field(default_factory=dict)
     tool_budget: ToolCallBudget | None = Field(default=None, exclude=True)
     event_sink: ToolEventSink | None = Field(default=None, exclude=True)
 
@@ -66,40 +70,12 @@ class TraceProjectionSpec(BaseModel):
     schema_version: str = Field(min_length=1, max_length=64)
     request_fields: frozenset[str]
     response_fields: frozenset[str]
-    simulated_on_replay: bool = False
 
     def project_request(self, value: dict[str, Any]) -> dict[str, Any]:
         return _allow(value, self.request_fields)
 
-    def project_response(self, value: dict[str, Any], *, for_replay: bool = False) -> dict[str, Any]:
-        projected = _allow(value, self.response_fields)
-        if for_replay and self.simulated_on_replay:
-            projected["simulated"] = True
-        return projected
-
-
-class ReplayToolDefinition(BaseModel):
-    model_config = ConfigDict(arbitrary_types_allowed=True, extra="forbid", frozen=True)
-
-    name: str
-    input_model: type[BaseModel]
-    risk: RiskLevel
-    required_permissions: frozenset[str]
-    trace_projection: TraceProjectionSpec
-
-    def manifest(self) -> dict[str, Any]:
-        return {
-            "name": self.name,
-            "input_schema": self.input_model.model_json_schema(),
-            "risk": self.risk.value,
-            "permissions": sorted(self.required_permissions),
-            "trace_projection": {
-                "schema_version": self.trace_projection.schema_version,
-                "request_fields": sorted(self.trace_projection.request_fields),
-                "response_fields": sorted(self.trace_projection.response_fields),
-                "simulated_on_replay": self.trace_projection.simulated_on_replay,
-            },
-        }
+    def project_response(self, value: dict[str, Any]) -> dict[str, Any]:
+        return _allow(value, self.response_fields)
 
 
 class ToolSpec(BaseModel):
@@ -133,7 +109,6 @@ class ToolSpec(BaseModel):
                     "schema_version": self.trace_projection.schema_version,
                     "request_fields": sorted(self.trace_projection.request_fields),
                     "response_fields": sorted(self.trace_projection.response_fields),
-                    "simulated_on_replay": self.trace_projection.simulated_on_replay,
                 }
                 if self.trace_projection is not None
                 else None

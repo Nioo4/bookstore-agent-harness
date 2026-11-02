@@ -31,7 +31,7 @@ processors:
           - set(span.trace_state, "")
           - keep_keys(span.attributes, ["http.route", "http.response.status_code", "http.status_code", "agent.name", "tool.name", "agent.model_profile", "run.status", "operation.status", "error.code", "trace.persistent"])
           - set(span.name, "go.operation") where not IsMatch(span.name, "^(http.request|guest.chat|agent.node|tool.invoke|model.complete|model.embed|rpc.catalog.search|rpc.catalog.get|rpc.order.prepare|rpc.order.decide|rpc.order.get|rpc.order.list|inventory.consume)$")
-          - delete_key(span.attributes, "http.route") where span.attributes["http.route"] != nil and not IsMatch(span.attributes["http.route"], "^/api/(chat/conversations/\\{conversation_id\\}/(messages|confirmations)|memories(/\\{memory_id\\})?|tasks(/inventory-watches|/\\{task_id\\}(/cancel)?)?|notifications(/\\{notification_id\\}/read)?|traces(/\\{run_id\\}(/replays)?)?)$")
+          - delete_key(span.attributes, "http.route") where span.attributes["http.route"] != nil and not IsMatch(span.attributes["http.route"], "^/api/(chat/conversations/\\{conversation_id\\}/(messages|confirmations)|memories(/\\{memory_id\\})?|tasks(/inventory-watches|/\\{task_id\\}(/cancel)?)?|notifications(/\\{notification_id\\}/read)?|traces(/\\{run_id\\})?)$")
   filter/privacy:
     error_mode: propagate
     trace_conditions:

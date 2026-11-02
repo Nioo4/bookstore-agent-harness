@@ -16,6 +16,7 @@ const AccessTokenTTL = 8 * time.Hour
 
 type AccessClaims struct {
 	Email         string `json:"email"`
+	DisplayName   string `json:"display_name"`
 	EmailVerified bool   `json:"email_verified"`
 	jwt.RegisteredClaims
 }
@@ -86,7 +87,7 @@ func LoadEd25519PublicKey(path string) (ed25519.PublicKey, error) {
 func (s *Ed25519Signer) Sign(user User, now time.Time) (string, time.Duration, error) {
 	expires := now.Add(AccessTokenTTL)
 	claims := AccessClaims{
-		Email: user.Email, EmailVerified: user.EmailVerifiedAt.Valid,
+		Email: user.Email, DisplayName: user.DisplayName, EmailVerified: user.EmailVerifiedAt.Valid,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer: s.issuer, Subject: strconv.FormatInt(user.UserID, 10),
 			IssuedAt: jwt.NewNumericDate(now), ExpiresAt: jwt.NewNumericDate(expires),

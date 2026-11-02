@@ -83,7 +83,7 @@ def grounded_catalog_draft(request):
     """Replace the numeric narrative, not append a correct table to wrong prose.
 
     Called after exact evidence/constraint validation and before the LLM content
-    review. The reviewed draft is also the one delivered by Chat and Replay.
+    review. The reviewed draft is the one delivered by Chat.
     """
     if request.draft._suppress_catalog_listing:
         return request.draft

@@ -17,7 +17,7 @@ from prometheus_client import Counter, Gauge, Histogram
 TRACER = trace.get_tracer("bookstore.agent", "0.1.0")
 PROPAGATOR = TraceContextTextMapPropagator()  # Never extract/forward baggage.
 AGENTS = frozenset({"catalog", "recommendation", "knowledge", "order", "memory", "verifier"})
-TOOLS = frozenset({"search_books", "get_book", "search_policy", "prepare_order", "create_order", "get_order", "list_my_orders"})
+TOOLS = frozenset({"search_books", "get_book", "search_book_knowledge", "search_policy", "prepare_order", "create_order", "get_order", "list_my_orders"})
 TASKS = Counter("bookstore_agent_tasks_total", "Chat executions by final delivery status", ["status"])
 NODE_SECONDS = Histogram("bookstore_agent_node_duration_seconds", "Agent node execution duration", ["agent", "status"])
 TOOL_ERRORS = Counter("bookstore_agent_tool_errors_total", "Failed tool invocation attempts", ["tool"])

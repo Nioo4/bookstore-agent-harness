@@ -2,7 +2,6 @@ package handler
 
 import (
 	"net/http"
-	"strings"
 
 	"bookstore/api/internal/logic"
 	"bookstore/api/internal/svc"
@@ -13,12 +12,17 @@ import (
 
 func GetOrderHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
 		var req types.GetOrderReq
 		if err := httpx.Parse(r, &req); err != nil {
 			writeRequestError(w, r, err)
 			return
 		}
-		resp, err := logic.NewOrderLogic(r.Context(), svcCtx).Get(bearerToken(r), req.OrderID)
+		token, ok := verifiedBrowserAccessToken(w, r, svcCtx)
+		if !ok {
+			return
+		}
+		resp, err := logic.NewOrderLogic(r.Context(), svcCtx).Get(token, req.OrderID)
 		if err != nil {
 			writeRPCError(w, r, err)
 			return
@@ -28,12 +32,17 @@ func GetOrderHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 }
 func ListOrdersHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
 		var req types.ListOrdersReq
 		if err := httpx.Parse(r, &req); err != nil {
 			writeRequestError(w, r, err)
 			return
 		}
-		resp, err := logic.NewOrderLogic(r.Context(), svcCtx).List(bearerToken(r), &req)
+		token, ok := verifiedBrowserAccessToken(w, r, svcCtx)
+		if !ok {
+			return
+		}
+		resp, err := logic.NewOrderLogic(r.Context(), svcCtx).List(token, &req)
 		if err != nil {
 			writeRPCError(w, r, err)
 			return
@@ -41,6 +50,16 @@ func ListOrdersHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 		httpx.OkJsonCtx(r.Context(), w, resp)
 	}
 }
-func bearerToken(r *http.Request) string {
-	return strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
+
+func verifiedBrowserAccessToken(w http.ResponseWriter, r *http.Request, svcCtx *svc.ServiceContext) (string, bool) {
+	token := accessTokenFromRequest(r)
+	if token == "" || svcCtx == nil || svcCtx.AuthVerifier == nil {
+		writeAPIError(w, r, http.StatusUnauthorized, "AUTH_REQUIRED", "authentication required", false)
+		return "", false
+	}
+	if _, err := svcCtx.AuthVerifier.Verify(token); err != nil {
+		writeAPIError(w, r, http.StatusUnauthorized, "AUTH_REQUIRED", "authentication required", false)
+		return "", false
+	}
+	return token, true
 }

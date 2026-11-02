@@ -7,7 +7,6 @@ from typing import Any, Protocol
 from pydantic import BaseModel, ConfigDict, Field
 from redis.asyncio import Redis
 
-from app.harness.plan import ValidatedPlan
 from app.trace.safety import TraceSafetyProjector
 
 
@@ -67,7 +66,6 @@ class PendingConfirmation(BaseModel):
     user_id: int = Field(gt=0)
     action_type: str = "CREATE_ORDER"
     risk: str = "COMMIT"
-    validated_plan: ValidatedPlan
 
 
 class ConversationStore(Protocol):

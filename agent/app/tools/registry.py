@@ -9,12 +9,12 @@ from collections.abc import Iterable
 from pydantic import ValidationError
 
 from app.tools.errors import ToolError, ToolPermissionError, UnknownToolError
-from app.tools.types import ReplayToolDefinition, RiskLevel, ToolContext, ToolPolicy, ToolResult, ToolSpec
+from app.tools.types import RiskLevel, ToolContext, ToolPolicy, ToolResult, ToolSpec
 from app.telemetry import tool_span
 
 
 class ToolRegistry:
-    _GUEST_TOOLS = frozenset({"search_books", "get_book", "search_policy"})
+    _GUEST_TOOLS = frozenset({"search_books", "get_book", "search_book_knowledge", "search_policy"})
 
     def __init__(self, specs: Iterable[ToolSpec] = (), *, policy: ToolPolicy | None = None) -> None:
         self._specs: dict[str, ToolSpec] = {}
@@ -26,6 +26,11 @@ class ToolRegistry:
         if spec.name in self._specs:
             raise ValueError(f"duplicate tool: {spec.name}")
         self._specs[spec.name] = spec
+
+    @property
+    def names(self) -> frozenset[str]:
+        """Registered names used by the v2 single-agent allowlist."""
+        return frozenset(self._specs)
 
     def get(self, name: str) -> ToolSpec:
         try:
@@ -42,23 +47,6 @@ class ToolRegistry:
             self.manifests(), ensure_ascii=False, sort_keys=True, separators=(",", ":")
         )
         return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
-
-    def replay_definitions(self) -> list[ReplayToolDefinition]:
-        definitions: list[ReplayToolDefinition] = []
-        for name in sorted(self._specs):
-            spec = self._specs[name]
-            if spec.trace_projection is None:
-                raise ValueError(f"business tool {name} has no trace projection")
-            definitions.append(
-                ReplayToolDefinition(
-                    name=spec.name,
-                    input_model=spec.input_model,
-                    risk=spec.risk,
-                    required_permissions=spec.required_permissions,
-                    trace_projection=spec.trace_projection,
-                )
-            )
-        return definitions
 
     async def invoke(
         self,

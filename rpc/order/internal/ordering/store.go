@@ -262,7 +262,7 @@ func (s *SQLStore) Decide(ctx context.Context, userID int64, conversationID stri
 				"book_id": item.BookID, "available_stock": current.AvailableStock - item.Quantity,
 				"inventory_version": current.Version + 1,
 			})
-			if err := insertOutbox(ctx, session, "inventory.stock_changed.v1", "book", fmt.Sprint(item.BookID), payload); err != nil {
+			if err := insertOutbox(ctx, session, "inventory.stock_changed.v1", "INVENTORY", fmt.Sprint(item.BookID), payload); err != nil {
 				return err
 			}
 		}

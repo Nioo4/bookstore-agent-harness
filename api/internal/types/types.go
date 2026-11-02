@@ -43,9 +43,25 @@ type AuthUser struct {
 }
 
 type LoginResp struct {
-	AccessToken string   `json:"access_token"`
+	// AccessToken is consumed by the HTTP handler and written to an HttpOnly
+	// cookie. It must never be serialized into the browser response body.
+	AccessToken string   `json:"-"`
 	ExpiresIn   int64    `json:"expires_in"`
 	User        AuthUser `json:"user"`
+}
+
+type SessionUser struct {
+	DisplayName   string `json:"display_name"`
+	EmailVerified bool   `json:"email_verified"`
+}
+
+type SessionResp struct {
+	Authenticated bool         `json:"authenticated"`
+	User          *SessionUser `json:"user"`
+}
+
+type LogoutResp struct {
+	Ok bool `json:"ok"`
 }
 
 type OrderItem struct {

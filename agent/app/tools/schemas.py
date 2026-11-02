@@ -46,6 +46,14 @@ class SearchPolicyInput(BaseModel):
     limit: int = Field(default=5, ge=1, le=5)
 
 
+class SearchBookKnowledgeInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    query: str = Field(min_length=2, max_length=1000)
+    book_ids: list[int] = Field(min_length=1, max_length=200)
+    limit: int = Field(default=12, ge=1, le=12)
+
+
 class OrderItemInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -54,28 +62,34 @@ class OrderItemInput(BaseModel):
 
 
 class PrepareOrderInput(BaseModel):
-    # Identity-like model fields are discarded; authenticated context is authoritative.
-    model_config = ConfigDict(extra="ignore")
+    # The model may request only items. Server-created identity/idempotency
+    # values are injected by the executor and forged fields are rejected.
+    model_config = ConfigDict(extra="forbid")
 
     items: list[OrderItemInput] = Field(min_length=1, max_length=50)
+
+
+class PrepareOrderRequest(PrepareOrderInput):
+    """Internal Order RPC payload after the server has bound idempotency."""
+
     idempotency_key: str = Field(min_length=8, max_length=128)
 
 
 class CreateOrderInput(BaseModel):
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid")
 
     confirmation_token: str = Field(min_length=32, max_length=512)
     decision: Literal["APPROVE", "REJECT"]
 
 
 class GetOrderInput(BaseModel):
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid")
 
     order_id: int = Field(gt=0)
 
 
 class ListMyOrdersInput(BaseModel):
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid")
 
     limit: int = Field(default=20, ge=1, le=50)
     cursor: str = ""

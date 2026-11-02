@@ -14,7 +14,7 @@ COPY agent/evals/ ./evals/
 COPY knowledge/ /app/knowledge/
 COPY deploy/ /app/deploy/
 COPY agent/Dockerfile ./
-RUN mkdir -p evals/reports && chown -R 10001:10001 evals/reports
+RUN mkdir -p evals/reports runtime && chown -R 10001:10001 evals/reports runtime
 USER 10001:10001
 EXPOSE 8000
 CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]

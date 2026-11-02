@@ -7,10 +7,6 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.api.auth import AuthUser
 from app.api.conversations import ConversationStore
 from app.harness.budget import ToolCallBudget
-from app.harness.checkpoint import CheckpointStore, RunStatus
-from app.harness.plan import PlanLimits
-from app.harness.runner import DagRunner
-from langgraph.checkpoint.base import BaseCheckpointSaver
 from app.tools.errors import ToolError
 from app.tools.registry import ToolRegistry
 from app.tools.types import ToolContext
@@ -30,16 +26,10 @@ class ConfirmationService:
         self,
         tools: ToolRegistry,
         conversations: ConversationStore,
-        checkpoints: CheckpointStore,
-        langgraph_checkpointer: BaseCheckpointSaver[Any],
-        limits: PlanLimits,
         trace_factory: TraceRecorderFactory | None = None,
     ) -> None:
         self.tools = tools
         self.conversations = conversations
-        self.checkpoints = checkpoints
-        self.langgraph_checkpointer = langgraph_checkpointer
-        self.limits = limits
         self.trace_factory = trace_factory
 
     async def decide(
@@ -58,14 +48,6 @@ class ConfirmationService:
             from app.api.conversations import ConversationNotFound
 
             raise ConversationNotFound
-        checkpoint = await self.checkpoints.load_run(pending.run_id)
-        if checkpoint is None or checkpoint.status not in {
-            RunStatus.WAITING_CONFIRMATION,
-            RunStatus.COMPLETED,
-            RunStatus.CANCELLED,
-        }:
-            raise ToolError("CONFIRMATION_NOT_FOUND", "confirmation not found")
-
         recorder = None
         recorder_token = None
         trace_status = "INCOMPLETE" if self.trace_factory is not None else None
@@ -77,9 +59,8 @@ class ConfirmationService:
                     and candidate.run.conversation_id == conversation_id
                 ):
                     trace_status = candidate.run.trace_status.value
-                    if checkpoint.status is RunStatus.WAITING_CONFIRMATION:
-                        recorder = candidate
-                        recorder_token = recorder.bind()
+                    recorder = candidate
+                    recorder_token = recorder.bind()
             except Exception:
                 recorder = None
 
@@ -102,23 +83,11 @@ class ConfirmationService:
             )
             return result.value
 
-        runner = DagRunner(
-            {},
-            self.checkpoints,
-            self.langgraph_checkpointer,
-            self.limits,
-            confirmation_handler=execute,
-        )
         try:
-            resumed = await runner.resume_confirmation(
-                pending.validated_plan,
-                run_id=pending.run_id,
-                decision=request.decision,
-            )
+            value = await execute(request.decision, _NoopBudget())
         finally:
             if recorder is not None and recorder_token is not None:
                 recorder.reset(recorder_token)
-        value = resumed.outputs["confirmation_result"]
         order = value.get("order")
         if request.decision == "APPROVE":
             if not isinstance(order, dict):
@@ -148,8 +117,6 @@ class ConfirmationService:
                         else TraceRunStatus.CANCELLED
                     ),
                     final_answer=recorder.run.final_answer,
-                    dag=recorder.run.dag,
-                    replayable=True,
                 )
                 trace_status = traced.trace_status.value
         return {
@@ -170,3 +137,8 @@ class ConfirmationService:
             "trace_id": pending.trace_id,
             **({"trace_status": trace_status} if trace_status is not None else {}),
         }
+
+
+class _NoopBudget:
+    async def consume(self) -> None:
+        return None

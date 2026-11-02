@@ -15,12 +15,6 @@ class TaskStatus(StrEnum):
     CANCELLED = "CANCELLED"
 
 
-class CheckpointStatus(StrEnum):
-    PENDING = "PENDING"
-    READY = "READY"
-    FAILED = "FAILED"
-
-
 class InventoryWatchRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -47,7 +41,6 @@ class AgentTask(BaseModel):
     trigger_event_id: str | None = None
     create_idempotency_key: str
     request_hash: bytes
-    checkpoint_status: CheckpointStatus
     expires_at: datetime
     triggered_at: datetime | None = None
     completed_at: datetime | None = None

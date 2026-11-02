@@ -16,8 +16,6 @@ from app.trace.usage import aggregate_usage
 from app.trace.types import (
     CostStatus,
     EvidenceDraft,
-    FixtureDraft,
-    FixtureOutcome,
     ReplayMode,
     RunKind,
     RunStatus,
@@ -27,7 +25,6 @@ from app.trace.types import (
     TokenUsage,
     UsageStatus,
     validate_usage,
-    ToolFixture,
     TraceCost,
     TraceEvidence,
     TraceRun,
@@ -42,8 +39,6 @@ from app.trace.types import (
 
 class TraceRepository(Protocol):
     async def create_run(self, run: TraceRun) -> TraceRun: ...
-
-    async def create_replay(self, run: TraceRun) -> tuple[TraceRun, bool]: ...
 
     async def get_owned(self, user_id: int, run_id: str) -> TraceRun: ...
 
@@ -60,15 +55,9 @@ class TraceRepository(Protocol):
         limit: int,
     ) -> list[TraceRun]: ...
 
-    async def list_replays(
-        self, user_id: int, source_run_id: str, before: tuple[datetime, str] | None, limit: int
-    ) -> list[TraceRun]: ...
-
     async def list_steps(self, run_id: str, after_sequence: int | None, limit: int) -> list[TraceStep]: ...
 
     async def list_evidence(self, run_id: str) -> list[TraceEvidence]: ...
-
-    async def replay_count(self, run_id: str) -> int: ...
 
     async def append_step(self, draft: StepDraft) -> TraceStep: ...
 
@@ -89,10 +78,6 @@ class TraceRepository(Protocol):
     ) -> TraceStep: ...
 
     async def insert_evidence(self, draft: EvidenceDraft) -> TraceEvidence: ...
-
-    async def insert_fixture(self, draft: FixtureDraft) -> ToolFixture: ...
-
-    async def list_fixtures(self, source_run_id: str) -> list[ToolFixture]: ...
 
     async def finish_run(
         self,
@@ -130,15 +115,7 @@ class TraceRepository(Protocol):
 
     async def mark_incomplete(self, run_id: str, reason: str) -> None: ...
 
-    async def mark_unreplayable(self, run_id: str, reason: str) -> None: ...
-
     async def soft_delete(self, user_id: int, run_id: str, now: datetime) -> tuple[int, int]: ...
-
-    async def claim_replay(self, owner: str, now: datetime, lease_expires_at: datetime) -> TraceRun | None: ...
-
-    async def renew_replay_lease(
-        self, run_id: str, owner: str, now: datetime, lease_expires_at: datetime
-    ) -> bool: ...
 
     async def is_deleted(self, run_id: str) -> bool: ...
 
@@ -156,7 +133,6 @@ class InMemoryTraceRepository:
         self.runs: dict[str, TraceRun] = {}
         self.steps: dict[str, list[TraceStep]] = {}
         self.evidence: dict[str, list[TraceEvidence]] = {}
-        self.fixtures: dict[str, list[ToolFixture]] = {}
         self._lock = asyncio.Lock()
 
     async def create_run(self, run: TraceRun) -> TraceRun:
@@ -188,26 +164,6 @@ class InMemoryTraceRepository:
             )
             unique[key] = reference
         return list(unique.values())
-
-    async def create_replay(self, run: TraceRun) -> tuple[TraceRun, bool]:
-        async with self._lock:
-            for current in self.runs.values():
-                if current.user_id == run.user_id and current.request_idempotency_key == run.request_idempotency_key:
-                    if current.request_hash != run.request_hash:
-                        raise TraceError("IDEMPOTENCY_CONFLICT", "idempotency key conflicts with another request")
-                    return current, True
-            source = self.runs.get(run.source_run_id or "")
-            _validate_replay_source(source, run.user_id)
-            if any(
-                item.user_id == run.user_id
-                and item.run_kind is RunKind.REPLAY
-                and item.status in {RunStatus.QUEUED, RunStatus.RUNNING}
-                and item.deleted_at is None
-                for item in self.runs.values()
-            ):
-                raise TraceError("REPLAY_ALREADY_RUNNING", "another replay is already running")
-            self.runs[run.run_id] = run
-            return run, False
 
     async def get_owned(self, user_id: int, run_id: str) -> TraceRun:
         run = self.runs.get(run_id)
@@ -244,20 +200,6 @@ class InMemoryTraceRepository:
         ]
         return sorted(values, key=lambda item: (item.created_at, item.run_id), reverse=True)[:limit]
 
-    async def list_replays(
-        self, user_id: int, source_run_id: str, before: tuple[datetime, str] | None, limit: int
-    ) -> list[TraceRun]:
-        await self.get_owned(user_id, source_run_id)
-        values = [
-            run
-            for run in self.runs.values()
-            if run.user_id == user_id
-            and run.source_run_id == source_run_id
-            and run.deleted_at is None
-            and (before is None or (run.created_at, run.run_id) < before)
-        ]
-        return sorted(values, key=lambda item: (item.created_at, item.run_id), reverse=True)[:limit]
-
     async def list_steps(self, run_id: str, after_sequence: int | None, limit: int) -> list[TraceStep]:
         return [
             step
@@ -267,9 +209,6 @@ class InMemoryTraceRepository:
 
     async def list_evidence(self, run_id: str) -> list[TraceEvidence]:
         return list(self.evidence.get(run_id, []))
-
-    async def replay_count(self, run_id: str) -> int:
-        return sum(1 for run in self.runs.values() if run.source_run_id == run_id and run.deleted_at is None)
 
     async def append_step(self, draft: StepDraft) -> TraceStep:
         if draft.usage_status is UsageStatus.LEGACY_UNKNOWN:
@@ -340,23 +279,6 @@ class InMemoryTraceRepository:
                 values.append(item)
             return next(existing for existing in values if existing.evidence_id == item.evidence_id)
 
-    async def insert_fixture(self, draft: FixtureDraft) -> ToolFixture:
-        item = ToolFixture(**draft.model_dump())
-        async with self._lock:
-            values = self.fixtures.setdefault(draft.source_run_id, [])
-            for existing in values:
-                if (
-                    existing.tool_name,
-                    existing.canonical_args_hash,
-                    existing.occurrence_index,
-                ) == (item.tool_name, item.canonical_args_hash, item.occurrence_index):
-                    return existing
-            values.append(item)
-            return item
-
-    async def list_fixtures(self, source_run_id: str) -> list[ToolFixture]:
-        return list(self.fixtures.get(source_run_id, []))
-
     async def finish_run(self, run_id: str, **values: Any) -> TraceRun:
         async with self._lock:
             run = self.runs.get(run_id)
@@ -412,17 +334,6 @@ class InMemoryTraceRepository:
                     }
                 )
 
-    async def mark_unreplayable(self, run_id: str, reason: str) -> None:
-        async with self._lock:
-            run = self.runs.get(run_id)
-            if run is not None and not run.status.terminal:
-                self.runs[run_id] = run.model_copy(
-                    update={
-                        "replayable": False,
-                        "replay_block_reason": reason[:64],
-                    }
-                )
-
     async def soft_delete(self, user_id: int, run_id: str, now: datetime) -> tuple[int, int]:
         async with self._lock:
             run = self.runs.get(run_id)
@@ -445,60 +356,6 @@ class InMemoryTraceRepository:
                 self.runs[item.run_id] = item.model_copy(update=updates)
             return len(targets), len(targets)
 
-    async def claim_replay(self, owner: str, now: datetime, lease_expires_at: datetime) -> TraceRun | None:
-        async with self._lock:
-            candidates = sorted(
-                (
-                    run
-                    for run in self.runs.values()
-                    if run.run_kind is RunKind.REPLAY
-                    and run.deleted_at is None
-                    and (
-                        run.status is RunStatus.QUEUED
-                        or (
-                            run.status is RunStatus.RUNNING
-                            and run.lease_expires_at is not None
-                            and run.lease_expires_at <= now
-                        )
-                    )
-                ),
-                key=lambda item: (item.created_at, item.run_id),
-            )
-            if not candidates:
-                return None
-            run = candidates[0]
-            claimed = run.model_copy(
-                update={
-                    "status": RunStatus.RUNNING,
-                    "lease_owner": owner,
-                    "lease_expires_at": lease_expires_at,
-                    "started_at": run.started_at or now,
-                    "updated_at": now,
-                    **({"trace_status": TraceStatus.INCOMPLETE, "replayable": False,
-                        "replay_block_reason": "RECOVERY_MODEL_COVERAGE_UNKNOWN"}
-                       if run.status is RunStatus.RUNNING else {}),
-                }
-            )
-            self.runs[run.run_id] = claimed
-            return claimed
-
-    async def renew_replay_lease(
-        self, run_id: str, owner: str, now: datetime, lease_expires_at: datetime
-    ) -> bool:
-        async with self._lock:
-            run = self.runs.get(run_id)
-            if (
-                run is None
-                or run.status is not RunStatus.RUNNING
-                or run.lease_owner != owner
-                or run.deleted_at is not None
-            ):
-                return False
-            self.runs[run_id] = run.model_copy(
-                update={"lease_expires_at": lease_expires_at, "updated_at": now}
-            )
-            return True
-
     async def is_deleted(self, run_id: str) -> bool:
         run = self.runs.get(run_id)
         return run is None or run.deleted_at is not None or run.status is RunStatus.CANCELLED
@@ -510,7 +367,6 @@ class InMemoryTraceRepository:
         values: list[Any] = [run.input, run.dag, run.final_answer]
         values.extend((step.input, step.output) for step in self.steps.get(run_id, []))
         values.extend(item.payload for item in self.evidence.get(run_id, []))
-        values.extend((item.request, item.response) for item in self.fixtures.get(run_id, []))
         return len(canonical_json(values).encode("utf-8"))
 
     async def purge_expired(self, now: datetime, hard_before: datetime) -> tuple[list[str], list[str]]:
@@ -546,7 +402,6 @@ class InMemoryTraceRepository:
             del self.runs[run_id]
             self.steps.pop(run_id, None)
             self.evidence.pop(run_id, None)
-            self.fixtures.pop(run_id, None)
             return True
 
 
@@ -604,65 +459,10 @@ class AsyncMySQLTraceRepository:
             for row in rows
         ]
 
-    async def create_replay(self, run: TraceRun) -> tuple[TraceRun, bool]:
-        try:
-            async with self._pool.acquire() as connection:
-                await connection.begin()
-                try:
-                    async with connection.cursor(DictCursor) as cursor:
-                        await cursor.execute(
-                            "SELECT * FROM agent_run WHERE user_id=%s AND request_idempotency_key=%s "
-                            "LIMIT 1 FOR UPDATE",
-                            (run.user_id, run.request_idempotency_key),
-                        )
-                        replay = await cursor.fetchone()
-                        if replay is not None:
-                            existing = _run(replay)
-                            if existing.request_hash != run.request_hash:
-                                raise TraceError("IDEMPOTENCY_CONFLICT", "idempotency key conflicts with another request")
-                            await connection.commit()
-                            return existing, True
-                        await cursor.execute(
-                            "SELECT * FROM agent_run WHERE run_id=%s AND user_id=%s AND deleted_at IS NULL "
-                            "LIMIT 1 FOR UPDATE",
-                            (run.source_run_id, run.user_id),
-                        )
-                        source_row = await cursor.fetchone()
-                        source = _run(source_row) if source_row is not None else None
-                        _validate_replay_source(source, run.user_id)
-                        await cursor.execute(
-                            "SELECT run_id FROM agent_run WHERE user_id=%s AND run_kind='REPLAY' "
-                            "AND status IN ('QUEUED','RUNNING') AND deleted_at IS NULL LIMIT 1 FOR UPDATE",
-                            (run.user_id,),
-                        )
-                        if await cursor.fetchone() is not None:
-                            raise TraceError("REPLAY_ALREADY_RUNNING", "another replay is already running")
-                        await cursor.execute(_INSERT_RUN, _run_insert_args(run))
-                    await connection.commit()
-                    return run, False
-                except Exception:
-                    await connection.rollback()
-                    raise
-        except TraceError:
-            raise
-        except asyncmy.errors.IntegrityError as exc:
-            rows = await self._query(
-                "SELECT * FROM agent_run WHERE user_id=%s AND request_idempotency_key=%s LIMIT 1",
-                (run.user_id, run.request_idempotency_key),
-            )
-            if rows:
-                existing = _run(rows[0])
-                if existing.request_hash != run.request_hash:
-                    raise TraceError("IDEMPOTENCY_CONFLICT", "idempotency key conflicts with another request") from exc
-                return existing, True
-            raise TraceDependencyUnavailable("trace replay create conflict") from exc
-        except Exception as exc:
-            raise TraceDependencyUnavailable("trace replay create failed") from exc
-
     async def get_owned(self, user_id: int, run_id: str) -> TraceRun:
         rows = await self._query(
             "SELECT * FROM agent_run WHERE run_id=%s AND user_id=%s AND deleted_at IS NULL "
-            "AND run_kind IN ('LIVE','REPLAY') LIMIT 1",
+            "AND run_kind='LIVE' LIMIT 1",
             (run_id, user_id),
         )
         if not rows:
@@ -685,7 +485,7 @@ class AsyncMySQLTraceRepository:
         before: tuple[datetime, str] | None,
         limit: int,
     ) -> list[TraceRun]:
-        query = "SELECT * FROM agent_run WHERE user_id=%s AND deleted_at IS NULL AND run_kind IN ('LIVE','REPLAY')"
+        query = "SELECT * FROM agent_run WHERE user_id=%s AND deleted_at IS NULL AND run_kind='LIVE'"
         args: list[Any] = [user_id]
         if conversation_id is not None:
             query += " AND conversation_id=%s"
@@ -696,19 +496,6 @@ class AsyncMySQLTraceRepository:
         if status is not None:
             query += " AND status=%s"
             args.append(status.value)
-        if before is not None:
-            query += " AND (created_at<%s OR (created_at=%s AND run_id<%s))"
-            args.extend([before[0], before[0], before[1]])
-        query += " ORDER BY created_at DESC,run_id DESC LIMIT %s"
-        args.append(limit)
-        return [_run(row) for row in await self._query(query, tuple(args))]
-
-    async def list_replays(
-        self, user_id: int, source_run_id: str, before: tuple[datetime, str] | None, limit: int
-    ) -> list[TraceRun]:
-        await self.get_owned(user_id, source_run_id)
-        query = "SELECT * FROM agent_run WHERE source_run_id=%s AND user_id=%s AND deleted_at IS NULL"
-        args: list[Any] = [source_run_id, user_id]
         if before is not None:
             query += " AND (created_at<%s OR (created_at=%s AND run_id<%s))"
             args.extend([before[0], before[0], before[1]])
@@ -733,12 +520,6 @@ class AsyncMySQLTraceRepository:
                 "SELECT * FROM agent_evidence WHERE run_id=%s ORDER BY created_at,evidence_id", (run_id,)
             )
         ]
-
-    async def replay_count(self, run_id: str) -> int:
-        rows = await self._query(
-            "SELECT COUNT(*) AS total FROM agent_run WHERE source_run_id=%s AND deleted_at IS NULL", (run_id,)
-        )
-        return int(rows[0]["total"])
 
     async def append_step(self, draft: StepDraft) -> TraceStep:
         if draft.usage_status is UsageStatus.LEGACY_UNKNOWN:
@@ -890,61 +671,6 @@ class AsyncMySQLTraceRepository:
         except Exception as exc:
             raise TraceDependencyUnavailable("trace evidence write failed") from exc
 
-    async def insert_fixture(self, draft: FixtureDraft) -> ToolFixture:
-        try:
-            async with self._pool.acquire() as connection:
-                async with connection.cursor(DictCursor) as cursor:
-                    await cursor.execute(
-                        "INSERT INTO agent_tool_fixture "
-                        "(fixture_id,source_run_id,source_step_id,tool_name,risk_level,canonical_args_hash,"
-                        "occurrence_index,request_json,response_json,outcome,error_code,schema_version,replayable,"
-                        "blocked_reason,content_hash,created_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
-                        "ON DUPLICATE KEY UPDATE fixture_id=fixture_id",
-                        (
-                            draft.fixture_id,
-                            draft.source_run_id,
-                            draft.source_step_id,
-                            draft.tool_name,
-                            draft.risk_level,
-                            draft.canonical_args_hash,
-                            draft.occurrence_index,
-                            _json(draft.request),
-                            _json(draft.response) if draft.response is not None else None,
-                            draft.outcome.value,
-                            draft.error_code,
-                            draft.schema_version,
-                            draft.replayable,
-                            draft.blocked_reason,
-                            draft.content_hash,
-                            draft.created_at,
-                        ),
-                    )
-                    await cursor.execute(
-                        "SELECT * FROM agent_tool_fixture WHERE source_run_id=%s AND tool_name=%s "
-                        "AND canonical_args_hash=%s AND occurrence_index=%s",
-                        (
-                            draft.source_run_id,
-                            draft.tool_name,
-                            draft.canonical_args_hash,
-                            draft.occurrence_index,
-                        ),
-                    )
-                    row = await cursor.fetchone()
-                await connection.commit()
-            return _fixture(row)
-        except Exception as exc:
-            raise TraceDependencyUnavailable("trace fixture write failed") from exc
-
-    async def list_fixtures(self, source_run_id: str) -> list[ToolFixture]:
-        return [
-            _fixture(row)
-            for row in await self._query(
-                "SELECT * FROM agent_tool_fixture WHERE source_run_id=%s "
-                "ORDER BY tool_name,canonical_args_hash,occurrence_index",
-                (source_run_id,),
-            )
-        ]
-
     async def finish_run(self, run_id: str, **values: Any) -> TraceRun:
         completed_at: datetime = values["completed_at"]
         try:
@@ -1087,19 +813,6 @@ class AsyncMySQLTraceRepository:
         except Exception as exc:
             raise TraceDependencyUnavailable("trace degradation update failed") from exc
 
-    async def mark_unreplayable(self, run_id: str, reason: str) -> None:
-        try:
-            async with self._pool.acquire() as connection:
-                async with connection.cursor() as cursor:
-                    await cursor.execute(
-                        "UPDATE agent_run SET replayable=FALSE,replay_block_reason=%s "
-                        "WHERE run_id=%s AND status NOT IN ('COMPLETED','FAILED','CANCELLED')",
-                        (reason[:64], run_id),
-                    )
-                await connection.commit()
-        except Exception as exc:
-            raise TraceDependencyUnavailable("trace replayability update failed") from exc
-
     async def soft_delete(self, user_id: int, run_id: str, now: datetime) -> tuple[int, int]:
         try:
             async with self._pool.acquire() as connection:
@@ -1108,7 +821,7 @@ class AsyncMySQLTraceRepository:
                     async with connection.cursor(DictCursor) as cursor:
                         await cursor.execute(
                             "SELECT * FROM agent_run WHERE run_id=%s AND user_id=%s AND deleted_at IS NULL "
-                            "AND run_kind IN ('LIVE','REPLAY') LIMIT 1 FOR UPDATE",
+                            "AND run_kind='LIVE' LIMIT 1 FOR UPDATE",
                             (run_id, user_id),
                         )
                         row = await cursor.fetchone()
@@ -1126,12 +839,9 @@ class AsyncMySQLTraceRepository:
                             targets.extend(str(item["run_id"]) for item in await cursor.fetchall())
                         placeholders = ",".join(["%s"] * len(targets))
                         await cursor.execute(
-                            f"UPDATE agent_run SET completed_at=CASE WHEN run_kind='REPLAY' "
-                            f"AND status IN ('QUEUED','RUNNING') THEN %s ELSE completed_at END,"
-                            f"status=CASE WHEN run_kind='REPLAY' AND status IN ('QUEUED','RUNNING') "
-                            f"THEN 'CANCELLED' ELSE status END,lease_owner=NULL,"
-                            f"lease_expires_at=NULL,deleted_at=%s,updated_at=%s WHERE run_id IN ({placeholders})",
-                            (now, now, now, *targets),
+                            f"UPDATE agent_run SET deleted_at=%s,updated_at=%s "
+                            f"WHERE run_id IN ({placeholders})",
+                            (now, now, *targets),
                         )
                     await connection.commit()
                     return len(targets), len(targets)
@@ -1142,60 +852,6 @@ class AsyncMySQLTraceRepository:
             raise
         except Exception as exc:
             raise TraceDependencyUnavailable("trace delete failed") from exc
-
-    async def claim_replay(self, owner: str, now: datetime, lease_expires_at: datetime) -> TraceRun | None:
-        try:
-            async with self._pool.acquire() as connection:
-                await connection.begin()
-                try:
-                    async with connection.cursor(DictCursor) as cursor:
-                        await cursor.execute(
-                            "SELECT run_id,status FROM agent_run WHERE run_kind='REPLAY' AND deleted_at IS NULL "
-                            "AND (status='QUEUED' OR (status='RUNNING' AND lease_expires_at<=%s)) "
-                            "ORDER BY created_at,run_id LIMIT 1 FOR UPDATE SKIP LOCKED",
-                            (now,),
-                        )
-                        candidate = await cursor.fetchone()
-                        if candidate is None:
-                            await connection.commit()
-                            return None
-                        if candidate["status"] == 'RUNNING':
-                            await cursor.execute(
-                                "UPDATE agent_run SET trace_status='INCOMPLETE',replayable=FALSE,"
-                                "replay_block_reason='RECOVERY_MODEL_COVERAGE_UNKNOWN' WHERE run_id=%s",
-                                (candidate["run_id"],))
-                        await cursor.execute(
-                            "UPDATE agent_run SET status='RUNNING',lease_owner=%s,lease_expires_at=%s,"
-                            "started_at=COALESCE(started_at,%s),updated_at=%s WHERE run_id=%s",
-                            (owner, lease_expires_at, now, now, candidate["run_id"]),
-                        )
-                        await cursor.execute("SELECT * FROM agent_run WHERE run_id=%s", (candidate["run_id"],))
-                        row = await cursor.fetchone()
-                    await connection.commit()
-                    return _run(row)
-                except Exception:
-                    await connection.rollback()
-                    raise
-        except Exception as exc:
-            raise TraceDependencyUnavailable("trace replay claim failed") from exc
-
-    async def renew_replay_lease(
-        self, run_id: str, owner: str, now: datetime, lease_expires_at: datetime
-    ) -> bool:
-        try:
-            async with self._pool.acquire() as connection:
-                async with connection.cursor() as cursor:
-                    await cursor.execute(
-                        "UPDATE agent_run SET lease_expires_at=%s,updated_at=%s "
-                        "WHERE run_id=%s AND run_kind='REPLAY' AND status='RUNNING' "
-                        "AND lease_owner=%s AND deleted_at IS NULL",
-                        (lease_expires_at, now, run_id, owner),
-                    )
-                    renewed = cursor.rowcount == 1
-                await connection.commit()
-                return renewed
-        except Exception as exc:
-            raise TraceDependencyUnavailable("trace replay lease renewal failed") from exc
 
     async def is_deleted(self, run_id: str) -> bool:
         rows = await self._query(
@@ -1475,41 +1131,6 @@ def _evidence(row: dict[str, Any]) -> TraceEvidence:
         content_hash=bytes(row["content_hash"]),
         created_at=utc(row["created_at"]),
     )
-
-
-def _fixture(row: dict[str, Any]) -> ToolFixture:
-    return ToolFixture(
-        fixture_id=str(row["fixture_id"]),
-        source_run_id=str(row["source_run_id"]),
-        source_step_id=str(row["source_step_id"]),
-        tool_name=row["tool_name"],
-        risk_level=row["risk_level"],
-        canonical_args_hash=bytes(row["canonical_args_hash"]),
-        occurrence_index=int(row["occurrence_index"]),
-        request=_json_value(row["request_json"]),
-        response=_json_value(row.get("response_json")),
-        outcome=FixtureOutcome(row["outcome"]),
-        error_code=row.get("error_code"),
-        schema_version=row["schema_version"],
-        replayable=bool(row["replayable"]),
-        blocked_reason=row.get("blocked_reason"),
-        content_hash=bytes(row["content_hash"]),
-        created_at=utc(row["created_at"]),
-    )
-
-
-def _validate_replay_source(source: TraceRun | None, user_id: int | None) -> None:
-    if (
-        source is None
-        or source.user_id != user_id
-        or source.deleted_at is not None
-        or source.run_kind is not RunKind.LIVE
-        or source.workflow_type is not WorkflowType.CHAT
-        or not source.status.terminal
-        or source.trace_status is not TraceStatus.COMPLETE
-        or not source.replayable
-    ):
-        raise TraceError("TRACE_NOT_REPLAYABLE", "trace is not replayable")
 
 
 def active_duration_ms(steps: Sequence[TraceStep]) -> int:

@@ -6,6 +6,7 @@ package handler
 import (
 	"net/http"
 
+	"bookstore/api/internal/agentproxy"
 	"bookstore/api/internal/svc"
 
 	"github.com/zeromicro/go-zero/rest"
@@ -13,11 +14,33 @@ import (
 
 func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 	server.AddRoutes([]rest.Route{
-		{Method: http.MethodPost, Path: "/api/auth/register", Handler: RegisterHandler(serverCtx)},
-		{Method: http.MethodPost, Path: "/api/auth/verify-email", Handler: VerifyEmailHandler(serverCtx)},
-		{Method: http.MethodPost, Path: "/api/auth/login", Handler: LoginHandler(serverCtx)},
-		{Method: http.MethodPost, Path: "/api/auth/resend-verification", Handler: ResendVerificationHandler(serverCtx)},
+		{Method: http.MethodPost, Path: "/api/auth/register", Handler: withBrowserOrigin(serverCtx.Config, RegisterHandler(serverCtx)).ServeHTTP},
+		{Method: http.MethodPost, Path: "/api/auth/verify-email", Handler: withBrowserOrigin(serverCtx.Config, VerifyEmailHandler(serverCtx)).ServeHTTP},
+		{Method: http.MethodPost, Path: "/api/auth/login", Handler: withBrowserOrigin(serverCtx.Config, LoginHandler(serverCtx)).ServeHTTP},
+		{Method: http.MethodPost, Path: "/api/auth/logout", Handler: withBrowserOrigin(serverCtx.Config, LogoutHandler(serverCtx)).ServeHTTP},
+		{Method: http.MethodPost, Path: "/api/auth/resend-verification", Handler: withBrowserOrigin(serverCtx.Config, ResendVerificationHandler(serverCtx)).ServeHTTP},
 	}, rest.WithTimeout(serverCtx.Config.AuthBudget.HTTP))
+	server.AddRoutes([]rest.Route{
+		{Method: http.MethodGet, Path: "/api/session", Handler: SessionHandler(serverCtx)},
+	})
+	agentHandler := AgentProxyHandler(serverCtx)
+	server.AddRoutes([]rest.Route{
+		{Method: http.MethodPost, Path: "/api/chat/conversations/:conversation_id/messages", Handler: withBrowserOrigin(serverCtx.Config, agentHandler).ServeHTTP},
+		{Method: http.MethodPost, Path: "/api/chat/conversations/:conversation_id/confirmations", Handler: withBrowserOrigin(serverCtx.Config, agentHandler).ServeHTTP},
+		{Method: http.MethodGet, Path: "/api/memories", Handler: agentHandler},
+		{Method: http.MethodPost, Path: "/api/memories/preferences", Handler: withBrowserOrigin(serverCtx.Config, agentHandler).ServeHTTP},
+		{Method: http.MethodDelete, Path: "/api/memories/:memory_id", Handler: withBrowserOrigin(serverCtx.Config, agentHandler).ServeHTTP},
+		{Method: http.MethodDelete, Path: "/api/memories", Handler: withBrowserOrigin(serverCtx.Config, agentHandler).ServeHTTP},
+		{Method: http.MethodPost, Path: "/api/tasks/inventory-watches", Handler: withBrowserOrigin(serverCtx.Config, agentHandler).ServeHTTP},
+		{Method: http.MethodGet, Path: "/api/tasks", Handler: agentHandler},
+		{Method: http.MethodGet, Path: "/api/tasks/:task_id", Handler: agentHandler},
+		{Method: http.MethodPost, Path: "/api/tasks/:task_id/cancel", Handler: withBrowserOrigin(serverCtx.Config, agentHandler).ServeHTTP},
+		{Method: http.MethodGet, Path: "/api/notifications", Handler: agentHandler},
+		{Method: http.MethodPost, Path: "/api/notifications/:notification_id/read", Handler: withBrowserOrigin(serverCtx.Config, agentHandler).ServeHTTP},
+		{Method: http.MethodGet, Path: "/api/traces", Handler: agentHandler},
+		{Method: http.MethodGet, Path: "/api/traces/:run_id", Handler: agentHandler},
+		{Method: http.MethodDelete, Path: "/api/traces/:run_id", Handler: withBrowserOrigin(serverCtx.Config, agentHandler).ServeHTTP},
+	}, rest.WithTimeout(agentproxy.RequestTimeout), rest.WithMaxBytes(128*1024))
 	server.AddRoutes(
 		[]rest.Route{
 			{
@@ -29,7 +52,7 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 			{
 				Method:  http.MethodPost,
 				Path:    "/api/books",
-				Handler: AddBookHandler(serverCtx),
+				Handler: withBrowserOrigin(serverCtx.Config, AddBookHandler(serverCtx)).ServeHTTP,
 			},
 			{
 				Method:  http.MethodGet,
@@ -49,17 +72,17 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 			{
 				Method:  http.MethodPut,
 				Path:    "/api/books/:book",
-				Handler: UpdateBookHandler(serverCtx),
+				Handler: withBrowserOrigin(serverCtx.Config, UpdateBookHandler(serverCtx)).ServeHTTP,
 			},
 			{
 				Method:  http.MethodDelete,
 				Path:    "/api/books/:book",
-				Handler: DeleteBookHandler(serverCtx),
+				Handler: withBrowserOrigin(serverCtx.Config, DeleteBookHandler(serverCtx)).ServeHTTP,
 			},
 			{
 				Method:  http.MethodPost,
 				Path:    "/api/books/:book_id/stock/deduct",
-				Handler: NewRateLimitMiddleware(serverCtx.StockRateLimiter).Handle(DeductStockHandler(serverCtx)),
+				Handler: withBrowserOrigin(serverCtx.Config, NewRateLimitMiddleware(serverCtx.StockRateLimiter).Handle(DeductStockHandler(serverCtx))).ServeHTTP,
 			},
 		},
 	)

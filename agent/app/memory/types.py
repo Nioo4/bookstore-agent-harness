@@ -75,6 +75,13 @@ COLLECTION_KEYS: dict[str, MemoryType] = {
 BUDGET_KEY = re.compile(r"^preference\.budget\.([A-Z]{3})$")
 EPISODE_KEY = re.compile(r"^episode\.([0-9a-f]{64})$")
 LANGUAGE_TAG = re.compile(r"^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$")
+V2_LANGUAGE_ALIASES = {
+    "中文": "zh-CN",
+    "简体中文": "zh-CN",
+    "繁体中文": "zh-TW",
+    "英文": "en",
+    "英语": "en",
+}
 
 _EMAIL = re.compile(r"(?i)\b[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9.-]+\.[a-z]{2,}\b")
 _JWT = re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b")
@@ -214,6 +221,22 @@ def _normalize_language(value: str) -> str:
         else:
             normalized.append(part.lower())
     return "-".join(normalized)
+
+
+def normalize_v2_preference_value(key: str, value: str) -> str:
+    """Normalize the public v2 preference contract before persistence."""
+    normalized = unicodedata.normalize("NFKC", value).strip()
+    if key == "PREFERRED_LANGUAGE":
+        return _normalize_language(V2_LANGUAGE_ALIASES.get(normalized, normalized))
+    if key == "MAX_USUAL_BUDGET":
+        try:
+            amount = int(normalized)
+        except ValueError as exc:
+            raise MemoryValueInvalid("budget preference must be a nonnegative integer in minor units") from exc
+        if amount < 0 or str(amount) != normalized:
+            raise MemoryValueInvalid("budget preference must be a nonnegative integer in minor units")
+        return str(amount)
+    return normalized
 
 
 def _normalize_episode(value: dict[str, Any]) -> dict[str, Any]:

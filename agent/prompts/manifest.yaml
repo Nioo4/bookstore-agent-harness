@@ -65,3 +65,18 @@ prompt_sets:
       - role: verifier
         path: prompts/v3-evidence-grounded/verifier.md
         sha256: aeceb2dd347e205ca0196f77a3469081d8bbc0cd5ad5fa9994472b12bda6346c
+  - version: v4-single-agent-rag
+    prompts:
+      - role: single_agent
+        path: prompts/v4-single-agent-rag/single_agent.md
+        sha256: 7b11740cdad54408a189a0a7e0ddf0a0cb8528aa318de6115fd08614fc55d5c5
+  - version: v4.1-single-agent-rag
+    prompts:
+      - role: single_agent
+        path: prompts/v4.1-single-agent-rag/single_agent.md
+        sha256: dbe254724dbe6057812438bb2304b75f7ec9837665a3fd89971d299e09382272
+  - version: v4.2-single-agent-rag
+    prompts:
+      - role: single_agent
+        path: prompts/v4.2-single-agent-rag/single_agent.md
+        sha256: 85cdcc4fb67b1796173417a37adabba725f412f31e5bd1f11fb3bf061f555e34

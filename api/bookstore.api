@@ -27,10 +27,19 @@ type (
 		EmailVerified bool `json:"email_verified"`
 	}
 	LoginResp {
-		AccessToken string `json:"access_token"`
+		AccessToken string `json:"-"`
 		ExpiresIn int64 `json:"expires_in"`
 		User AuthUser `json:"user"`
 	}
+	SessionUser {
+		DisplayName string `json:"display_name"`
+		EmailVerified bool `json:"email_verified"`
+	}
+	SessionResp {
+		Authenticated bool `json:"authenticated"`
+		User *SessionUser `json:"user"`
+	}
+	LogoutResp { Ok bool `json:"ok"` }
 	OrderItem {
 		BookID int64 `json:"book_id"`
 		ISBN string `json:"isbn"`
@@ -193,6 +202,12 @@ service bookstore-api {
 
 	@handler LoginHandler
 	post /api/auth/login (LoginReq) returns (LoginResp)
+
+	@handler LogoutHandler
+	post /api/auth/logout returns (LogoutResp)
+
+	@handler SessionHandler
+	get /api/session returns (SessionResp)
 
 	@handler ListOrdersHandler
 	get /api/orders (ListOrdersReq) returns (ListOrdersResp)

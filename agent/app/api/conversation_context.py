@@ -29,6 +29,11 @@ _LATIN_AUTHOR_ADJACENT_BOOK = re.compile(
 )
 _EXPLICIT_OUT_OF_STOCK = re.compile(r"(?:只要|仅|必须|只找|要|查询|查找|找|有没有).{0,12}?缺货(?:的)?(?:书|本|图书)?")
 _OUT_OF_STOCK_ALLOWED = re.compile(r"缺货.{0,8}?(?:也可以|也行|都可以|允许)")
+_CATALOG_QUERY_HINTS: tuple[tuple[re.Pattern[str], tuple[str, ...]], ...] = (
+    (re.compile(r"服务雪崩|熔断|限流|容错|故障恢复"), ("分布式系统", "Java")),
+    (re.compile(r"消息幂等|重复消费|消息队列"), ("分布式系统",)),
+    (re.compile(r"数据库索引|索引优化|查询优化"), ("数据库",)),
+)
 
 
 @dataclass(frozen=True)
@@ -87,6 +92,8 @@ def request_context(
     effective: EffectiveConversationRequest,
     memory_context: list[dict[str, Any]],
 ) -> dict[str, Any]:
+    selected_book = effective.selected_book.model_dump(mode="json") if effective.selected_book is not None else None
+    referenced_books = [book.model_dump(mode="json") for book in effective.referenced_books]
     return {
         "user_request": content,
         "required_question_ids": effective.intent.required_question_ids,
@@ -97,8 +104,56 @@ def request_context(
             else None
         ),
         "conversation_context": effective.context_for_agents,
+        "selected_book": selected_book,
+        "referenced_books": referenced_books,
         "memory_context": memory_context,
+        "catalog_query_hints": catalog_query_hints(content),
     }
+
+
+def catalog_query_hints(content: str) -> list[str]:
+    """Map a small reviewed concept vocabulary to Catalog-searchable topics.
+
+    Hints do not claim book coverage and never weaken explicit filters. They
+    only bridge natural problem wording to the deliberately small demo catalog;
+    BOOK_GUIDE evidence must still support any final suitability statement.
+    """
+    values: list[str] = []
+    for pattern, hints in _CATALOG_QUERY_HINTS:
+        if pattern.search(content):
+            values.extend(hints)
+    return list(dict.fromkeys(values))
+
+
+def deterministic_intent(content: str) -> UserIntent:
+    """Build the small request contract without a second model call.
+
+    The online v2 path has one model role only: the controlled answer/tool
+    loop.  Hard filters are parsed from explicit text and normalized by the
+    same code used to merge follow-ups; the question IDs are stable labels for
+    final-answer coverage, not model-invented facts.
+    """
+    text = content.strip()
+    question_ids: list[str] = []
+    if re.search(r"(?:退换|退款|配送|隐私|规则|政策|能否退|可以退|是否支持退)", text, re.IGNORECASE):
+        question_ids.append("policy")
+    purchase_intent = re.search(r"(?:买|下单|购买|订单预览|生成.{0,6}预览)", text, re.IGNORECASE)
+    comparison_intent = re.search(r"(?:比较|区别|差别|哪个更|更适合|前两本)", text, re.IGNORECASE)
+    ordinal_reference = re.search(r"第[一二三四五12345]本", text, re.IGNORECASE)
+    if comparison_intent or (ordinal_reference and not purchase_intent):
+        question_ids.append("comparison")
+    watch_intent = re.search(r"(?:补货|到货|库存).{0,24}(?:监听|提醒|通知)|(?:监听|提醒|通知).{0,24}(?:补货|到货|库存)", text, re.IGNORECASE)
+    if watch_intent:
+        question_ids.append("inventory_watch")
+    if re.search(r"(?:买|下单|购买|查(?:询|看).{0,8}订单|我的订单|价格|预算|有货|书|图书|推荐|作者|分类|语言|ISBN|isbn)", text, re.IGNORECASE) and not watch_intent:
+        question_ids.append("recommendation")
+    if not question_ids:
+        question_ids.append("answer")
+    # Preserve first-seen semantic order and avoid duplicate IDs when a
+    # request combines (for example) a recommendation with a comparison.
+    question_ids = list(dict.fromkeys(question_ids))
+    constraints = _normalized_explicit_constraints(UserIntent().constraints, text)
+    return UserIntent(required_question_ids=question_ids, constraints=constraints)
 
 
 def updated_context(

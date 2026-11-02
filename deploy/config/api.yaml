@@ -1,4 +1,4 @@
-Name: bookstore-api
+Name: bookstore-service
 Host: 0.0.0.0
 Port: 8888
 Timeout: 5000
@@ -8,11 +8,14 @@ AuthBudget:
   HTTP: ${AUTH_HTTP_TIMEOUT}
   Web: ${AUTH_WEB_TIMEOUT}
 TrustedProxyCIDRs: ["${TRUSTED_PROXY_CIDRS}"]
+CookieSecure: ${COOKIE_SECURE}
+AppBaseURL: "${APP_BASE_URL}"
+AgentAPIURL: "${AGENT_API_URL}"
 JWT:
   PublicKeyPath: /keys/public/jwt-public.pem
   Issuer: bookstore
 Log:
-  ServiceName: bookstore-api
+  ServiceName: bookstore-service
   Mode: console
   Level: error
 Middlewares:
@@ -22,20 +25,21 @@ Prometheus:
   Port: 9101
   Path: /metrics
 Telemetry:
-  Name: bookstore-api
-  Endpoint: otel-collector:4317
+  Name: bookstore-service
+  # Empty by default; the observability Compose profile supplies an endpoint.
+  Endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT}
   Sampler: 1.0
   Batcher: otlpgrpc
 Add:
-  Endpoints: [add-rpc:8080]
+  Endpoints: [bookstore-service:9090]
   Timeout: 3000
 Check:
-  Endpoints: [check-rpc:8081]
+  Endpoints: [bookstore-service:9090]
   Timeout: 3000
 Auth:
-  Endpoints: [auth-rpc:8082]
+  Endpoints: [bookstore-service:9090]
 Order:
-  Endpoints: [order-rpc:8083]
+  Endpoints: [bookstore-service:9090]
   Timeout: 5000
 StockRateLimit:
   Enabled: true

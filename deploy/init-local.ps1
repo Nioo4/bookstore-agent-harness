@@ -13,7 +13,7 @@ $values = @{
     MYSQL_ROOT_PASSWORD = New-LocalSecret
     MYSQL_BUSINESS_PASSWORD = New-LocalSecret
     MYSQL_AGENT_PASSWORD = New-LocalSecret
-    MYSQL_PUBLISHER_PASSWORD = New-LocalSecret
+    MYSQL_WORKER_PASSWORD = New-LocalSecret
     GUEST_RATE_LIMIT_HMAC_KEY = New-LocalSecret
     GRAFANA_ADMIN_PASSWORD = New-LocalSecret
 }
@@ -23,4 +23,5 @@ $result = foreach ($line in $lines) {
     if ($values.ContainsKey($name)) { "$name=$($values[$name])" } else { $line }
 }
 [IO.File]::WriteAllLines($environmentFile, $result, [Text.UTF8Encoding]::new($false))
-Write-Output 'Created .env with fresh local secrets. Configure the model gateway before normal startup; compose.e2e.yaml uses an explicit test fixture model.'
+Write-Output 'Created .env with fresh local secrets, including MYSQL_WORKER_PASSWORD required by the v2 worker. Configure the model gateway before normal startup; compose.e2e.yaml uses an explicit test fixture model.'
+Write-Output 'An existing .env is never overwritten; if upgrading an existing checkout, add MYSQL_WORKER_PASSWORD explicitly before running docker compose config.'

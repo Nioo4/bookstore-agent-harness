@@ -5,9 +5,6 @@ Mode: pro
 Log:
   Mode: console
   Level: error
-Etcd:
-  Hosts: [etcd:2379]
-  Key: add.rpc
 DataSource: "${MYSQL_DSN}"
 Table: book
 Cache:
@@ -19,7 +16,7 @@ Prometheus:
   Port: 9102
   Path: /metrics
 Telemetry:
-  Name: bookstore-add-rpc
-  Endpoint: otel-collector:4317
+  Name: bookstore-service-catalog-write
+  Endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT}
   Sampler: 1.0
   Batcher: otlpgrpc

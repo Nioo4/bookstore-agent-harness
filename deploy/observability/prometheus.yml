@@ -3,12 +3,9 @@ global:
 scrape_configs:
   - job_name: bookstore-go
     static_configs:
-      - targets: [go-api:9101, add-rpc:9102, check-rpc:9103, auth-rpc:9104, order-rpc:9105]
+      - targets: [bookstore-service:9101]
   - job_name: bookstore-agent
     static_configs:
       - targets: [agent-api:8000]
-  - job_name: bookstore-workers
-    static_configs:
-      - targets: [agent-worker:9106, trace-worker:9107]
 rule_files:
   - /etc/prometheus/alerts.yml

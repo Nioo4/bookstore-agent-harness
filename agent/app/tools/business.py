@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import hashlib
+from typing import Any
 
 from app.tools.clients import CatalogClient, OrderClient
 from app.tools.errors import ToolError
-from app.tools.knowledge import PolicyKnowledgeService
+from app.rag.service import RagSearchService
 from app.tools.policy import DeterministicPolicyEngine
 from app.tools.registry import ToolRegistry
 from app.tools.schemas import (
@@ -13,10 +14,12 @@ from app.tools.schemas import (
     GetOrderInput,
     ListMyOrdersInput,
     PrepareOrderInput,
+    PrepareOrderRequest,
     SearchPolicyInput,
+    SearchBookKnowledgeInput,
     SearchBooksInput,
 )
-from app.tools.types import ReplayToolDefinition, RiskLevel, ToolContext, ToolResult, ToolSpec, TraceProjectionSpec
+from app.tools.types import RiskLevel, ToolContext, ToolResult, ToolSpec, TraceProjectionSpec
 
 
 def _book_evidence(book: dict[str, object]) -> str:
@@ -31,7 +34,8 @@ def _prepare_idempotency_key(trace_id: str) -> str:
 def build_business_tool_registry(
     catalog: CatalogClient,
     orders: OrderClient,
-    knowledge: PolicyKnowledgeService | None = None,
+    knowledge: Any | None = None,
+    book_knowledge: RagSearchService | None = None,
 ) -> ToolRegistry:
     async def search_books(arguments: SearchBooksInput, _: ToolContext) -> ToolResult:
         value = await catalog.search_books(arguments, timeout=3)
@@ -49,7 +53,10 @@ def build_business_tool_registry(
     async def search_policy(arguments: SearchPolicyInput, _: ToolContext) -> ToolResult:
         assert knowledge is not None
         try:
-            chunks = await knowledge.search(arguments.query, arguments.limit)
+            if isinstance(knowledge, RagSearchService):
+                chunks = await knowledge.search_policy(arguments.query, arguments.limit)
+            else:
+                chunks = await knowledge.search(arguments.query, arguments.limit)
         except Exception as exc:
             raise ToolError("DEPENDENCY_UNAVAILABLE", "policy knowledge service is unavailable", retryable=True) from exc
         return ToolResult(
@@ -57,9 +64,27 @@ def build_business_tool_registry(
             evidence_ids=[f"policy:{chunk['content_hash']}" for chunk in chunks],
         )
 
+    async def search_book_knowledge(arguments: SearchBookKnowledgeInput, context: ToolContext) -> ToolResult:
+        if book_knowledge is None:
+            raise ToolError("RAG_RESULT_UNAVAILABLE", "book knowledge service is unavailable", retryable=True)
+        requested = set(arguments.book_ids)
+        if not requested.issubset(context.catalog_evidence_book_ids):
+            raise ToolError("EVIDENCE_MISMATCH", "book knowledge IDs must come from current Catalog evidence")
+        try:
+            chunks = await book_knowledge.search_book_knowledge(arguments.query, requested, limit=arguments.limit)
+        except ValueError as exc:
+            raise ToolError("EVIDENCE_MISMATCH", str(exc)) from exc
+        except Exception as exc:
+            raise ToolError("RAG_RESULT_UNAVAILABLE", "book knowledge service is unavailable", retryable=True) from exc
+        return ToolResult(
+            value={"chunks": chunks},
+            evidence_ids=[chunk["evidence_id"] for chunk in chunks],
+        )
+
     async def prepare_order(arguments: PrepareOrderInput, context: ToolContext) -> ToolResult:
-        request = arguments.model_copy(
-            update={"idempotency_key": _prepare_idempotency_key(context.trace_id)}
+        request = PrepareOrderRequest(
+            items=arguments.items,
+            idempotency_key=_prepare_idempotency_key(context.trace_id),
         )
         value = await orders.prepare_order(request, context.access_token or "", context.conversation_id, timeout=5)
         token_digest = hashlib.sha256(value["confirmation_token"].encode()).hexdigest()[:16]
@@ -97,8 +122,8 @@ def build_business_tool_registry(
     specs = [
             ToolSpec(name="search_books", description="Search authoritative real-time catalog data.", input_model=SearchBooksInput, risk=RiskLevel.READ_ONLY, timeout_seconds=3, max_retries=1, idempotent=True, required_permissions=frozenset({"catalog:read"}), error_codes=frozenset({"INVALID_TOOL_ARGUMENTS", "TOOL_TIMEOUT", "BUSINESS_RPC_ERROR"}), trace_projection=TraceProjectionSpec(schema_version="search_books-v1", request_fields=frozenset(SearchBooksInput.model_fields), response_fields=frozenset({"*"})), executor=search_books),
             ToolSpec(name="get_book", description="Get one book by ID or ISBN from the authoritative catalog.", input_model=GetBookInput, risk=RiskLevel.READ_ONLY, timeout_seconds=3, max_retries=1, idempotent=True, required_permissions=frozenset({"catalog:read"}), error_codes=frozenset({"BOOK_NOT_FOUND", "INVALID_TOOL_ARGUMENTS", "TOOL_TIMEOUT"}), trace_projection=TraceProjectionSpec(schema_version="get_book-v1", request_fields=frozenset(GetBookInput.model_fields), response_fields=frozenset({"*"})), executor=get_book),
-            ToolSpec(name="prepare_order", description="Create a non-mutating order preview and one-time confirmation action.", input_model=PrepareOrderInput, risk=RiskLevel.PREPARE, timeout_seconds=5, max_retries=1, idempotent=True, required_permissions=frozenset({"order:prepare"}), error_codes=frozenset({"AUTH_REQUIRED", "EMAIL_NOT_VERIFIED", "BOOK_INACTIVE", "INVENTORY_INSUFFICIENT", "IDEMPOTENCY_CONFLICT", "TOOL_TIMEOUT"}), trace_projection=TraceProjectionSpec(schema_version="prepare_order-v1", request_fields=frozenset({"items"}), response_fields=frozenset({"items", "total_amount", "currency", "expires_at", "confirmation_required"}), simulated_on_replay=True), executor=prepare_order),
-            ToolSpec(name="create_order", description="Apply an explicit APPROVE or REJECT decision through the transactional Order RPC.", input_model=CreateOrderInput, risk=RiskLevel.COMMIT, timeout_seconds=8, max_retries=1, idempotent=True, required_permissions=frozenset({"order:commit"}), error_codes=frozenset({"AUTH_REQUIRED", "EMAIL_NOT_VERIFIED", "CONFIRMATION_REQUIRED", "CONFIRMATION_EXPIRED", "CONFIRMATION_NOT_FOUND", "CONFIRMATION_ALREADY_DECIDED", "PRICE_CHANGED", "BOOK_INACTIVE", "INVENTORY_INSUFFICIENT", "TOOL_TIMEOUT"}), trace_projection=TraceProjectionSpec(schema_version="create_order-v1", request_fields=frozenset({"decision"}), response_fields=frozenset({"confirmation_id", "decision", "status", "order", "replayed"}), simulated_on_replay=True), executor=create_order),
+            ToolSpec(name="prepare_order", description="Create a non-mutating order preview and one-time confirmation action.", input_model=PrepareOrderInput, risk=RiskLevel.PREPARE, timeout_seconds=5, max_retries=1, idempotent=True, required_permissions=frozenset({"order:prepare"}), error_codes=frozenset({"AUTH_REQUIRED", "EMAIL_NOT_VERIFIED", "BOOK_INACTIVE", "INVENTORY_INSUFFICIENT", "IDEMPOTENCY_CONFLICT", "TOOL_TIMEOUT"}), trace_projection=TraceProjectionSpec(schema_version="prepare_order-v1", request_fields=frozenset({"items"}), response_fields=frozenset({"items", "total_amount", "currency", "expires_at", "confirmation_required"})), executor=prepare_order),
+            ToolSpec(name="create_order", description="Apply an explicit APPROVE or REJECT decision through the transactional Order RPC.", input_model=CreateOrderInput, risk=RiskLevel.COMMIT, timeout_seconds=8, max_retries=1, idempotent=True, required_permissions=frozenset({"order:commit"}), error_codes=frozenset({"AUTH_REQUIRED", "EMAIL_NOT_VERIFIED", "CONFIRMATION_REQUIRED", "CONFIRMATION_EXPIRED", "CONFIRMATION_NOT_FOUND", "CONFIRMATION_ALREADY_DECIDED", "PRICE_CHANGED", "BOOK_INACTIVE", "INVENTORY_INSUFFICIENT", "TOOL_TIMEOUT"}), trace_projection=TraceProjectionSpec(schema_version="create_order-v1", request_fields=frozenset({"decision"}), response_fields=frozenset({"confirmation_id", "decision", "status", "order", "replayed"})), executor=create_order),
             ToolSpec(name="get_order", description="Read one order scoped to the authenticated user.", input_model=GetOrderInput, risk=RiskLevel.USER_SCOPED_READ, timeout_seconds=3, max_retries=1, idempotent=True, required_permissions=frozenset({"order:read"}), error_codes=frozenset({"AUTH_REQUIRED", "ORDER_NOT_FOUND", "TOOL_TIMEOUT"}), trace_projection=TraceProjectionSpec(schema_version="get_order-v1", request_fields=frozenset(GetOrderInput.model_fields), response_fields=frozenset({"*"})), executor=get_order),
             ToolSpec(name="list_my_orders", description="List orders scoped to the authenticated user.", input_model=ListMyOrdersInput, risk=RiskLevel.USER_SCOPED_READ, timeout_seconds=3, max_retries=1, idempotent=True, required_permissions=frozenset({"order:read"}), error_codes=frozenset({"AUTH_REQUIRED", "TOOL_TIMEOUT"}), trace_projection=TraceProjectionSpec(schema_version="list_my_orders-v1", request_fields=frozenset(ListMyOrdersInput.model_fields), response_fields=frozenset({"*"})), executor=list_my_orders),
     ]
@@ -106,96 +131,27 @@ def build_business_tool_registry(
         specs.append(
             ToolSpec(name="search_policy", description="Search versioned policy knowledge and return source citations.", input_model=SearchPolicyInput, risk=RiskLevel.READ_ONLY, timeout_seconds=5, max_retries=1, idempotent=True, required_permissions=frozenset({"policy:read"}), error_codes=frozenset({"INVALID_TOOL_ARGUMENTS", "TOOL_TIMEOUT", "DEPENDENCY_UNAVAILABLE"}), trace_projection=TraceProjectionSpec(schema_version="search_policy-v1", request_fields=frozenset(SearchPolicyInput.model_fields), response_fields=frozenset({"*"})), executor=search_policy)
         )
+    if book_knowledge is not None:
+        specs.append(
+            ToolSpec(
+                name="search_book_knowledge",
+                description="Search curated book knowledge for Catalog books already observed in this run.",
+                input_model=SearchBookKnowledgeInput,
+                risk=RiskLevel.READ_ONLY,
+                timeout_seconds=5,
+                max_retries=1,
+                idempotent=True,
+                required_permissions=frozenset({"book-knowledge:read"}),
+                error_codes=frozenset({"INVALID_TOOL_ARGUMENTS", "TOOL_TIMEOUT", "RAG_RESULT_UNAVAILABLE", "EVIDENCE_MISMATCH"}),
+                trace_projection=TraceProjectionSpec(
+                    schema_version="search_book_knowledge-v1",
+                    request_fields=frozenset(SearchBookKnowledgeInput.model_fields),
+                    response_fields=frozenset({"*"}),
+                ),
+                executor=search_book_knowledge,
+            )
+        )
     return ToolRegistry(
         specs,
         policy=DeterministicPolicyEngine(),
     )
-
-
-def build_business_replay_definitions() -> list[ReplayToolDefinition]:
-    """Pure replay schemas: deliberately contains no executor, client, policy, or network handle."""
-    return [
-        ReplayToolDefinition(
-            name="search_books",
-            input_model=SearchBooksInput,
-            risk=RiskLevel.READ_ONLY,
-            required_permissions=frozenset({"catalog:read"}),
-            trace_projection=TraceProjectionSpec(
-                schema_version="search_books-v1",
-                request_fields=frozenset(SearchBooksInput.model_fields),
-                response_fields=frozenset({"*"}),
-            ),
-        ),
-        ReplayToolDefinition(
-            name="get_book",
-            input_model=GetBookInput,
-            risk=RiskLevel.READ_ONLY,
-            required_permissions=frozenset({"catalog:read"}),
-            trace_projection=TraceProjectionSpec(
-                schema_version="get_book-v1",
-                request_fields=frozenset(GetBookInput.model_fields),
-                response_fields=frozenset({"*"}),
-            ),
-        ),
-        ReplayToolDefinition(
-            name="search_policy",
-            input_model=SearchPolicyInput,
-            risk=RiskLevel.READ_ONLY,
-            required_permissions=frozenset({"policy:read"}),
-            trace_projection=TraceProjectionSpec(
-                schema_version="search_policy-v1",
-                request_fields=frozenset(SearchPolicyInput.model_fields),
-                response_fields=frozenset({"*"}),
-            ),
-        ),
-        ReplayToolDefinition(
-            name="prepare_order",
-            input_model=PrepareOrderInput,
-            risk=RiskLevel.PREPARE,
-            required_permissions=frozenset({"order:prepare"}),
-            trace_projection=TraceProjectionSpec(
-                schema_version="prepare_order-v1",
-                request_fields=frozenset({"items"}),
-                response_fields=frozenset(
-                    {"items", "total_amount", "currency", "expires_at", "confirmation_required"}
-                ),
-                simulated_on_replay=True,
-            ),
-        ),
-        ReplayToolDefinition(
-            name="create_order",
-            input_model=CreateOrderInput,
-            risk=RiskLevel.COMMIT,
-            required_permissions=frozenset({"order:commit"}),
-            trace_projection=TraceProjectionSpec(
-                schema_version="create_order-v1",
-                request_fields=frozenset({"decision"}),
-                response_fields=frozenset(
-                    {"confirmation_id", "decision", "status", "order", "replayed"}
-                ),
-                simulated_on_replay=True,
-            ),
-        ),
-        ReplayToolDefinition(
-            name="get_order",
-            input_model=GetOrderInput,
-            risk=RiskLevel.USER_SCOPED_READ,
-            required_permissions=frozenset({"order:read"}),
-            trace_projection=TraceProjectionSpec(
-                schema_version="get_order-v1",
-                request_fields=frozenset(GetOrderInput.model_fields),
-                response_fields=frozenset({"*"}),
-            ),
-        ),
-        ReplayToolDefinition(
-            name="list_my_orders",
-            input_model=ListMyOrdersInput,
-            risk=RiskLevel.USER_SCOPED_READ,
-            required_permissions=frozenset({"order:read"}),
-            trace_projection=TraceProjectionSpec(
-                schema_version="list_my_orders-v1",
-                request_fields=frozenset(ListMyOrdersInput.model_fields),
-                response_fields=frozenset({"*"}),
-            ),
-        ),
-    ]

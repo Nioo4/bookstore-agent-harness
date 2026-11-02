@@ -16,6 +16,10 @@ profiles:
     router: deepseek-v4-flash
     agent: deepseek-v4-flash
     verifier: deepseek-v4-flash
+  - name: deepseek-flash-v2
+    router: deepseek-v4-flash
+    agent: deepseek-v4-flash
+    verifier: deepseek-v4-flash
   - name: deepseek-pro-v1
     router: deepseek-v4-pro
     agent: deepseek-v4-pro

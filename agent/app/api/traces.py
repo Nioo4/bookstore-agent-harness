@@ -4,14 +4,15 @@ import uuid
 
 from fastapi import APIRouter, Header, Request
 from fastapi.responses import JSONResponse
-from pydantic import ValidationError
-
 from app.api.auth import AccessTokenVerifier, AuthUser
 from app.trace.errors import TraceError
-from app.trace.service import ReplayRequest, TraceService
+from app.trace.service import TraceService
 
 
-def build_trace_router(service: TraceService, verifier: AccessTokenVerifier) -> APIRouter:
+def build_trace_router(
+    service: TraceService,
+    verifier: AccessTokenVerifier,
+) -> APIRouter:
     router = APIRouter(prefix="/api/traces", tags=["traces"])
 
     @router.get("")
@@ -58,60 +59,6 @@ def build_trace_router(service: TraceService, verifier: AccessTokenVerifier) -> 
         except (TraceError, ValueError) as exc:
             return _trace_error(exc)
 
-    @router.post("/{run_id}/replays")
-    async def create_replay(
-        run_id: str,
-        request: Request,
-        authorization: str | None = Header(default=None),
-        idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
-    ):
-        authenticated = _authenticated(verifier, authorization)
-        if isinstance(authenticated, JSONResponse):
-            return authenticated
-        if not authenticated.email_verified:
-            return _error(403, "EMAIL_NOT_VERIFIED", "verified email is required", False)
-        try:
-            body = await request.json()
-            parsed = ReplayRequest.model_validate(body)
-            run, replayed = await service.create_replay(
-                authenticated.user_id,
-                run_id,
-                parsed,
-                idempotency_key=idempotency_key or "",
-            )
-            return JSONResponse(
-                status_code=200 if replayed else 202,
-                content={"run": run.public_summary(), "replayed": replayed, "trace_id": _trace_id()},
-            )
-        except (ValidationError, ValueError):
-            return _error(422, "TRACE_REQUEST_INVALID", "invalid replay request", False)
-        except TraceError as exc:
-            return _trace_error(exc)
-
-    @router.get("/{run_id}/replays")
-    async def list_replays(
-        run_id: str, request: Request, authorization: str | None = Header(default=None)
-    ):
-        authenticated = _authenticated(verifier, authorization)
-        if isinstance(authenticated, JSONResponse):
-            return authenticated
-        params = request.query_params
-        try:
-            limit = int(params.get("limit", "20"))
-            runs, next_cursor = await service.page_replays(
-                authenticated.user_id,
-                run_id,
-                cursor=params.get("cursor"),
-                limit=limit,
-            )
-            return {
-                "runs": await service.public_summaries(authenticated.user_id, runs),
-                "next_cursor": next_cursor,
-                "trace_id": _trace_id(),
-            }
-        except (TraceError, ValueError) as exc:
-            return _trace_error(exc)
-
     @router.delete("/{run_id}")
     async def delete_trace(run_id: str, authorization: str | None = Header(default=None)):
         authenticated = _authenticated(verifier, authorization)
@@ -148,9 +95,7 @@ def _trace_error(exc: Exception) -> JSONResponse:
     statuses = {
         "TRACE_NOT_FOUND": 404,
         "EMAIL_NOT_VERIFIED": 403,
-        "TRACE_NOT_REPLAYABLE": 409,
         "TRACE_NOT_DELETABLE": 409,
-        "REPLAY_ALREADY_RUNNING": 409,
         "IDEMPOTENCY_CONFLICT": 409,
         "TRACE_REQUEST_INVALID": 422,
         "MODEL_PROFILE_NOT_ALLOWED": 422,

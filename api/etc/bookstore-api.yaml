@@ -3,6 +3,7 @@ Host: 127.0.0.1
 Port: 8888
 Timeout: 1500
 CpuThreshold: 800
+AppBaseURL: http://localhost:8088
 Middlewares:
   Breaker: true
   Shedding: true

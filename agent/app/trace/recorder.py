@@ -9,7 +9,7 @@ from typing import Any
 from app.agents.evidence import evidence_payload
 from app.models.provider import ModelProvider, ModelRequest, ModelResponse
 from app.tools.errors import ToolError
-from app.tools.types import ReplayToolDefinition, RiskLevel, ToolResult, ToolSpec
+from app.tools.types import RiskLevel, ToolResult, ToolSpec
 from app.trace.errors import TraceDependencyUnavailable
 from app.trace.manifests import VersionRegistry
 from app.trace.pricing import PricingCalculator
@@ -19,8 +19,6 @@ from app.trace.safety import TraceSafetyProjector
 from app.trace.types import (
     CostStatus,
     EvidenceDraft,
-    FixtureDraft,
-    FixtureOutcome,
     RunKind,
     RunStatus,
     StepDraft,
@@ -63,7 +61,6 @@ class TraceRecorder:
         self.max_run_bytes = max_run_bytes
         self.degraded = run.trace_status is TraceStatus.INCOMPLETE
         self._observed_known = False
-        self._fixture_occurrences: dict[tuple[str, bytes], int] = {}
         self._memory_ids: set[str] = set()
         self._memory_values: set[str] = set()
         self._explicit_request_memory_values: set[str] = set()
@@ -117,7 +114,7 @@ class TraceRecorder:
             status=RunStatus.RUNNING,
             trace_status=TraceStatus.RECORDING,
             replayable=False,
-            replay_block_reason=("INPUT_REDACTED_OR_TRUNCATED" if not projected.replay_safe else None),
+            replay_block_reason="ONLINE_REPLAY_REMOVED",
             input=projected.value,
             model_profile=model_profile,
             model_manifest_hash=versions.model_profile_hash(model_profile),
@@ -308,7 +305,7 @@ class TraceRecorder:
             error_message="model call failed",
         )
 
-    async def tool_started(self, spec: ToolSpec | ReplayToolDefinition, request: dict[str, Any], attempt: int) -> str | None:
+    async def tool_started(self, spec: ToolSpec, request: dict[str, Any], attempt: int) -> str | None:
         projection = spec.trace_projection
         safe_request = projection.project_request(request) if projection is not None else {}
         return await self.start_step(
@@ -323,7 +320,7 @@ class TraceRecorder:
     async def tool_completed(
         self,
         step_id: str | None,
-        spec: ToolSpec | ReplayToolDefinition,
+        spec: ToolSpec,
         request: dict[str, Any],
         result: ToolResult,
     ) -> None:
@@ -331,18 +328,6 @@ class TraceRecorder:
         if projection is None:
             await self._degrade("TOOL_PROJECTION_MISSING")
             return
-        projected_request = self.safety.json(projection.project_request(request))
-        projected_response = self.safety.json(projection.project_response(result.value))
-        args_hash = sha256_json(projected_request.value)
-        occurrence_key = (spec.name, args_hash)
-        occurrence = self._fixture_occurrences.get(occurrence_key, 0)
-        self._fixture_occurrences[occurrence_key] = occurrence + 1
-        replayable = (
-            projected_request.replay_safe
-            and projected_response.replay_safe
-            and projection.schema_version != ""
-        )
-        blocked_reason = None if replayable else "FIXTURE_REDACTED_OR_TRUNCATED"
         timestamp = datetime.now(UTC)
         try:
             if step_id is not None:
@@ -360,48 +345,19 @@ class TraceRecorder:
                             created_at=timestamp,
                         )
                     )
-                if self.run.run_kind is RunKind.LIVE:
-                    await self.repository.insert_fixture(
-                        FixtureDraft(
-                        fixture_id=str(uuid.uuid4()),
-                        source_run_id=self.run.run_id,
-                        source_step_id=step_id,
-                        tool_name=spec.name,
-                        risk_level=_trace_risk(spec.risk),
-                        canonical_args_hash=args_hash,
-                        occurrence_index=occurrence,
-                        request=projected_request.value,
-                        response=projected_response.value,
-                        outcome=FixtureOutcome.SUCCESS,
-                        schema_version=projection.schema_version,
-                        replayable=replayable,
-                        blocked_reason=blocked_reason,
-                        content_hash=sha256_json(
-                            {"request": projected_request.value, "response": projected_response.value}
-                        ),
-                        created_at=timestamp,
-                        )
-                    )
             await self.finish_step(
                 step_id,
                 status=StepStatus.COMPLETED,
                 output_value=result.value,
                 evidence_ids=result.evidence_ids,
             )
-            if not replayable:
-                await self.repository.mark_unreplayable(
-                    self.run.run_id, blocked_reason or "FIXTURE_UNSAFE"
-                )
-                self.run = self.run.model_copy(
-                    update={"replayable": False, "replay_block_reason": blocked_reason}
-                )
         except Exception:
-            await self._degrade("FIXTURE_WRITE_FAILED")
+            await self._degrade("TRACE_WRITE_FAILED")
 
     async def tool_failed(
         self,
         step_id: str | None,
-        spec: ToolSpec | ReplayToolDefinition,
+        spec: ToolSpec,
         request: dict[str, Any],
         error: ToolError,
     ) -> None:
@@ -409,42 +365,7 @@ class TraceRecorder:
         if projection is None:
             await self._degrade("TOOL_PROJECTION_MISSING")
             return
-        projected_request = self.safety.json(projection.project_request(request))
-        replayable = projected_request.replay_safe and projection.schema_version != ""
-        blocked_reason = None if replayable else "FIXTURE_REDACTED_OR_TRUNCATED"
-        args_hash = sha256_json(projected_request.value)
-        occurrence_key = (spec.name, args_hash)
-        occurrence = self._fixture_occurrences.get(occurrence_key, 0)
-        self._fixture_occurrences[occurrence_key] = occurrence + 1
         try:
-            if step_id is not None:
-                if self.run.run_kind is RunKind.LIVE:
-                    await self.repository.insert_fixture(
-                        FixtureDraft(
-                        fixture_id=str(uuid.uuid4()),
-                        source_run_id=self.run.run_id,
-                        source_step_id=step_id,
-                        tool_name=spec.name,
-                        risk_level=_trace_risk(spec.risk),
-                        canonical_args_hash=args_hash,
-                        occurrence_index=occurrence,
-                        request=projected_request.value,
-                        response=None,
-                        outcome=(
-                            FixtureOutcome.TECHNICAL_ERROR
-                            if error.retryable
-                            else FixtureOutcome.BUSINESS_ERROR
-                        ),
-                        error_code=error.code,
-                        schema_version=projection.schema_version,
-                        replayable=replayable,
-                        blocked_reason=blocked_reason,
-                        content_hash=sha256_json(
-                            {"request": projected_request.value, "error_code": error.code}
-                        ),
-                        created_at=datetime.now(UTC),
-                        )
-                    )
             await self.finish_step(
                 step_id,
                 status=StepStatus.FAILED,
@@ -452,15 +373,8 @@ class TraceRecorder:
                 error_code=error.code,
                 error_message="tool call failed",
             )
-            if not replayable:
-                await self.repository.mark_unreplayable(
-                    self.run.run_id, blocked_reason or "FIXTURE_UNSAFE"
-                )
-                self.run = self.run.model_copy(
-                    update={"replayable": False, "replay_block_reason": blocked_reason}
-                )
         except Exception:
-            await self._degrade("FIXTURE_WRITE_FAILED")
+            await self._degrade("TRACE_WRITE_FAILED")
 
     async def record_confirmation_decision(self, decision: str, status: str) -> None:
         step_id = await self.start_step(
@@ -472,81 +386,42 @@ class TraceRecorder:
         )
         if step_id is None:
             return
-        request = {"decision": decision, "action_type": "CREATE_ORDER", "risk": "COMMIT"}
         response = {"status": status}
         try:
-            if self.run.run_kind is RunKind.LIVE:
-                await self.repository.insert_fixture(
-                    FixtureDraft(
-                        fixture_id=str(uuid.uuid4()),
-                        source_run_id=self.run.run_id,
-                        source_step_id=step_id,
-                        tool_name="confirmation_decision",
-                        risk_level="COMMIT",
-                        canonical_args_hash=sha256_json(request),
-                        occurrence_index=0,
-                        request=request,
-                        response=response,
-                        outcome=FixtureOutcome.SUCCESS,
-                        schema_version="confirmation-decision-v1",
-                        replayable=True,
-                        content_hash=sha256_json({"request": request, "response": response}),
-                        created_at=datetime.now(UTC),
-                    )
-                )
             await self.finish_step(
                 step_id,
                 status=StepStatus.COMPLETED,
                 output_value=response,
             )
         except Exception:
-            await self._degrade("CONFIRMATION_TRACE_WRITE_FAILED")
+            await self._degrade("TRACE_WRITE_FAILED")
 
     async def finish_run(
         self,
         *,
         status: RunStatus,
         final_answer: str | None,
-        dag: dict[str, Any] | None,
         error_code: str | None = None,
         error_message: str | None = None,
-        replayable: bool = True,
-        replay_block_reason: str | None = None,
-        unused_fixture_count: int | None = None,
     ) -> TraceRun:
         answer_value = self._without_memory(final_answer) if final_answer is not None else None
         answer = self.safety.text(str(answer_value)).value if answer_value is not None else None
         safe_error = self.safety.text(error_message, kind="error").value if error_message else None
         usage, usage_status, cost = await self.usage_and_cost()
-        prior_block_reason = (
-            None if self.run.replay_block_reason == "RUN_NOT_TERMINAL" else self.run.replay_block_reason
-        )
-        effective_replayable = (
-            replayable
-            and not self.degraded
-            and prior_block_reason is None
-            and replay_block_reason is None
-            and status in {RunStatus.COMPLETED, RunStatus.CANCELLED}
-        )
         trace_status = TraceStatus.INCOMPLETE if self.degraded else TraceStatus.COMPLETE
         try:
             completed = await self.repository.finish_run(
                 self.run.run_id,
                 status=status,
                 trace_status=trace_status,
-                replayable=effective_replayable,
-                replay_block_reason=(
-                    prior_block_reason
-                    or replay_block_reason
-                    or ("TRACE_INCOMPLETE" if self.degraded else None)
-                    or ("RUN_FAILED" if status is RunStatus.FAILED else None)
-                ),
+                replayable=False,
+                replay_block_reason=("TRACE_INCOMPLETE" if self.degraded else "ONLINE_REPLAY_REMOVED"),
                 final_answer=str(answer) if answer is not None else None,
-                dag=self.safety.json(dag).value if dag is not None else None,
+                dag=None,
                 token_usage=usage,
                 usage_status=usage_status,
                 cost=cost,
-                unused_fixture_count=unused_fixture_count,
+                unused_fixture_count=None,
                 error_code=error_code,
                 error_message=str(safe_error) if safe_error is not None else None,
                 completed_at=datetime.now(UTC),
@@ -564,9 +439,7 @@ class TraceRecorder:
                 }
             )
 
-    async def pause_for_confirmation(
-        self, *, final_answer: str, dag: dict[str, Any]
-    ) -> TraceRun:
+    async def pause_for_confirmation(self, *, final_answer: str) -> TraceRun:
         answer = self.safety.text(final_answer).value
         usage, usage_status, cost = await self.usage_and_cost()
         try:
@@ -576,7 +449,7 @@ class TraceRecorder:
                 trace_status=TraceStatus.INCOMPLETE if self.degraded else TraceStatus.COMPLETE,
                 replay_block_reason="RUN_NOT_TERMINAL",
                 final_answer=str(answer),
-                dag=self.safety.json(dag).value,
+                dag=None,
                 token_usage=usage,
                 usage_status=usage_status,
                 cost=cost,
@@ -589,33 +462,6 @@ class TraceRecorder:
             return self.run.model_copy(
                 update={
                     "status": RunStatus.WAITING_CONFIRMATION,
-                    "trace_status": TraceStatus.INCOMPLETE,
-                    "replayable": False,
-                }
-            )
-
-    async def pause_for_event(self, *, dag: dict[str, Any]) -> TraceRun:
-        usage, usage_status, cost = await self.usage_and_cost()
-        try:
-            paused = await self.repository.pause_run(
-                self.run.run_id,
-                status=RunStatus.WAITING_EVENT,
-                trace_status=TraceStatus.INCOMPLETE if self.degraded else TraceStatus.COMPLETE,
-                replay_block_reason="RUN_NOT_TERMINAL",
-                final_answer=None,
-                dag=self.safety.json(dag).value,
-                token_usage=usage,
-                usage_status=usage_status,
-                cost=cost,
-                updated_at=datetime.now(UTC),
-            )
-            self.run = paused
-            return paused
-        except Exception:
-            await self._degrade("TRACE_PAUSE_FAILED")
-            return self.run.model_copy(
-                update={
-                    "status": RunStatus.WAITING_EVENT,
                     "trace_status": TraceStatus.INCOMPLETE,
                     "replayable": False,
                 }

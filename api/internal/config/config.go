@@ -29,7 +29,15 @@ type Config struct {
 	rest.RestConf
 	AuthBudget        authbudget.Config
 	TrustedProxyCIDRs []string `json:",optional"`
-	JWT               struct {
+	// CookieSecure is false for the local HTTP demo and must be enabled when
+	// the browser-facing API is served over HTTPS.
+	CookieSecure bool `json:",default=false"`
+	// AppBaseURL is the browser origin used for state-changing request checks.
+	// Deployments should override it with APP_BASE_URL; the default keeps the
+	// local Vite/reverse-proxy demo usable when no environment is supplied.
+	AppBaseURL  string `json:",default=http://localhost:8088"`
+	AgentAPIURL string `json:",default=http://agent-api:8000"`
+	JWT         struct {
 		PublicKeyPath string `json:",default=../deploy/local/keys/public/jwt-public.pem"`
 		Issuer        string `json:",default=bookstore"`
 	}

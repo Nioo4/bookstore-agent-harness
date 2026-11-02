@@ -1,4 +1,4 @@
-"""Shared LIVE/replay request schema; money stays in catalog minor units."""
+"""Deterministic request schema; money stays in catalog minor units."""
 from __future__ import annotations
 
 import re
@@ -38,7 +38,7 @@ _WATCH_REQUEST = re.compile(
 )
 _NEGATED_WATCH = re.compile(r"(?:(?:不要|不需要|无需|取消).{0,8}?(?:监听|提醒|通知)|\b(?:don't|do not|no)\s+(?:watch|alert)\b)", re.IGNORECASE)
 _ISBN = re.compile(r"\b(?:ISBN\s*[:：]?\s*)?([0-9][0-9Xx-]{8,16}[0-9Xx])\b", re.IGNORECASE)
-_BOOK_ID = re.compile(r"\b(?:B|book\s+)(\d{1,8})\b", re.IGNORECASE)
+_BOOK_ID = re.compile(r"(?:\bB|\bbook\s+|#)(\d{1,8})\b", re.IGNORECASE)
 _TITLE = re.compile(r"《([^》]{1,120})》")
 _WATCH_QUANTITY = re.compile(r"(?:(?:库存|补货|补到|到货).{0,16}?(?:达到|到)?\s*([\d一二两三四五六七八九]{1,2})\s*(?:本|册|部)|\bat\s+(\d{1,2})\s+(?:copies|books?)\b)", re.IGNORECASE)
 _WATCH_DURATION = re.compile(r"(\d{1,3})\s*(天|日|小时|时|hours?|hrs?)", re.IGNORECASE)
