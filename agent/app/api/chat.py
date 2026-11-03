@@ -16,6 +16,7 @@ from app.api.conversations import ConversationContext, ConversationContextLease,
 from app.api.guest_telemetry import GuestTelemetry
 from app.harness.single_agent import SingleAgentAction, SingleAgentRuntime
 from app.models.provider import ModelMessage, ModelProvider, ModelRequest
+from app.models.invocation import invoke_model
 from app.memory.errors import MemoryError
 from app.memory.service import MemoryService
 from app.tools.errors import ToolError
@@ -333,41 +334,52 @@ class ChatService:
                             model_profile=recorder.run.model_profile,
                             prompt_version=recorder.run.prompt_set_version,
                         )
-                    response = await invoke_model(
-                        self.provider,
-                        caller="answer_repair",
-                        node_scope="single-agent/repair",
-                        request=ModelRequest(
-                            model=self.agent_model,
-                            temperature=0,
-                            response_schema=SingleAgentAction.model_json_schema(),
-                            messages=[
-                                ModelMessage(
-                                    role="system",
-                                    content=(
-                                        "Repair the FINAL JSON using only the supplied Catalog and RAG evidence. "
-                                        "Do not add a book, price, stock, policy or evidence ID that is absent. "
-                                        "Return a FINAL action only."
+                    try:
+                        response = await invoke_model(
+                            self.provider,
+                            caller="answer_repair",
+                            node_scope="single-agent/repair",
+                            request=ModelRequest(
+                                model=self.agent_model,
+                                temperature=0,
+                                response_schema=SingleAgentAction.model_json_schema(),
+                                messages=[
+                                    ModelMessage(
+                                        role="system",
+                                        content=(
+                                            "Repair the FINAL JSON using only the supplied Catalog and RAG evidence. "
+                                            "Do not add a book, price, stock, policy or evidence ID that is absent. "
+                                            "Return a FINAL action only."
+                                        ),
                                     ),
-                                ),
-                                ModelMessage(
-                                    role="user",
-                                    content=json.dumps(
-                                        {
-                                            "request": request.content,
-                                            "previous": action.model_dump(mode="json"),
-                                            "issues": issues,
-                                            "tool_results": result_tool_values(tool_results),
-                                        },
-                                        ensure_ascii=False,
+                                    ModelMessage(
+                                        role="user",
+                                        content=json.dumps(
+                                            {
+                                                "request": request.content,
+                                                "previous": action.model_dump(mode="json"),
+                                                "issues": issues,
+                                                "tool_results": result_tool_values(tool_results),
+                                            },
+                                            ensure_ascii=False,
+                                        ),
                                     ),
-                                ),
-                            ],
-                        ),
-                    )
-                    repaired = SingleAgentAction.model_validate_json(response.content)
-                    if repaired.action != "FINAL":
-                        raise ValueError("repair must return FINAL")
+                                ],
+                            ),
+                        )
+                        repaired = SingleAgentAction.model_validate_json(response.content)
+                        if repaired.action != "FINAL":
+                            raise ValueError("repair must return FINAL")
+                    except (Exception, asyncio.CancelledError) as exc:
+                        if recorder is not None:
+                            await recorder.finish_step(
+                                repair_step,
+                                status=StepStatus.FAILED,
+                                output_value=None,
+                                error_code="RUN_CANCELLED" if isinstance(exc, asyncio.CancelledError) else self._error_code(exc),
+                                error_message="answer repair failed",
+                            )
+                        raise
                     if recorder is not None:
                         await recorder.finish_step(
                             repair_step,
@@ -617,6 +629,8 @@ class ChatService:
                 return current.code
             if isinstance(current, ToolBudgetExceeded):
                 return "AGENT_BUDGET_EXCEEDED"
+            if isinstance(current, (NameError, AttributeError, TypeError)):
+                return "INTERNAL_ERROR"
             current = current.__cause__
         return "DEPENDENCY_UNAVAILABLE"
 
