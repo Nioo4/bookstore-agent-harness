@@ -1,137 +1,116 @@
 # 书店微服务系统
 
-这是一个本地可容器化的单 Agent RAG 工程 MVP：Go `bookstore-service` 负责认证、Catalog、库存和模拟订单事务；Python `agent-api` 负责受控模型循环、工具适配、RAG 和 Trace；React/Vite 构建静态 SPA；MySQL 是业务事实和 Outbox 的权威存储。
+一个支持自然语言找书的单 Agent RAG 书店应用，提供条件推荐、书籍比较、带来源的政策问答、模拟订单、补货监听、个人偏好和执行轨迹。
 
-订单必须经过预览和显式确认；补货只产生站内通知，不自动下单。Fixture 只验证协议、权限、事务和恢复边界，不能证明真实模型质量。真实模型或真实 Embedding 只有在操作者明确授权后才可运行。
+前端使用 React/Vite，Go 负责账号、商品、库存和订单，Python 负责 Agent、知识检索和后台任务，配合 MySQL、Redis、Qdrant。订单需要用户确认，补货只发送站内通知，不自动下单。本项目用于本地演示，不提供真实支付、配送或退款。
 
-规范性基线是 [V2 单 Agent RAG Spec](docs/bookstore-single-agent-rag-refactor-spec.md)。启动和验收命令见 [运行指南](docs/code-usage-guide.md) 与 [部署说明](docs/deployment.md)。
+## 准备环境
 
-## 启动
-
-需要 Docker Desktop（Linux 容器）和 PowerShell 7。先准备本地配置：
+安装 Git、Docker Desktop（Linux 容器模式）、PowerShell 7 和 Python 3.12。以下命令在 PowerShell 中执行，建议使用英文目录，避免部分 Docker 环境的路径兼容问题。
 
 ```powershell
+git clone https://github.com/Nioo4/bookstore-agent-harness.git
+cd bookstore-agent-harness
 .\deploy\init-local.ps1
-docker compose config --quiet
 ```
 
-普通 Compose 使用 `.env` 中的模型网关；它可能产生 Provider 费用，首次联调前必须单独确认范围。启动时不会自动建立收费索引：知识索引按 Spec §11.7 由操作者显式执行。
+最后一条命令生成本地 `.env`；已有配置时跳过，不要覆盖。下面两种启动方式任选其一，不要同时占用默认端口。
 
-不调用外部模型时使用隔离 Fixture。空卷不能直接 `up`，使用两阶段启动器：
+## 快速体验：模拟模型
 
 ```powershell
 .\deploy\start_v2_fixture.ps1 -Project bookstore-stage11
 ```
 
-该命令只接受测试项目名，先启动依赖/Go/model-fixture，追加导入100本书并显式建立 RAG Manifest，最后启动 Agent API/Worker/Nginx；不删除卷、不清空表，也不输出密钥。
+启动器构建服务、初始化数据库、导入100本合成演示书并建立测试知识索引。首次启动需要下载依赖，请等待完成。
 
-Fixture 使用专用固定测试网段，同一时刻只运行一个 Fixture 项目；启动器发现网段被占用时会提前失败，不会删除或停止其他项目。
+- 书店：<http://127.0.0.1:8088>
+- 验证邮件：<http://127.0.0.1:8025>
 
-入口：<http://127.0.0.1:8088>；验证邮件：<http://127.0.0.1:8025>。观测组件属于可选 `observability` Profile，不是默认运行依赖。
+此模式无需模型密钥，不调用付费服务，使用固定模拟响应，适合体验页面和业务流程，不代表真实自然语言推荐质量。同一时刻只运行一个模拟环境。
 
-## 架构
+## 使用真实模型
 
-```mermaid
-flowchart LR
-    Browser[Browser React SPA] --> Nginx[Nginx static SPA + same-origin proxy]
-    Nginx --> Go[bookstore-service: HTTP + internal gRPC]
-    Go -->|allowlisted HTTP/SSE proxy| Agent[agent-api: FastAPI SSE]
-    Agent -->|internal gRPC| Go
-    Go --> MySQL[(MySQL business facts + Outbox)]
-    Go --> Redis[(Redis cache / short-term state)]
-    Agent --> Redis
-    Agent --> Qdrant[(Qdrant versioned RAG index)]
-    Agent --> Model[fixture or explicitly enabled model gateway]
-    Worker[agent-worker: MySQL lease worker] --> MySQL
+此模式可能产生聊天和 Embedding 费用。编辑根目录 `.env`，分别填写：
+
+```dotenv
+APP_BASE_URL=http://localhost:8088
+MODEL_BASE_URL=你的聊天接口地址
+MODEL_API_KEY=你的聊天密钥
+MODEL_ADAPTER=deepseek-chat-json-v1
+AGENT_MODEL=你的兼容DeepSeek模型名称
+EMBEDDING_BASE_URL=你的向量接口地址
+EMBEDDING_API_KEY=你的向量密钥
+EMBEDDING_MODEL=你的Qwen向量模型名称
+EMBEDDING_DIMENSIONS=1024
 ```
 
-默认本地 Compose 服务固定为 MySQL、Redis、Qdrant、Mailpit、一次性 migrate/bootstrap、`bookstore-service`、`agent-api`、`agent-worker` 和 Nginx。Node.js 只用于 Vite 构建和 Web 测试；它不是运行时服务。Prometheus、Grafana、Tempo 和 OTel Collector 只在观测 Profile 中启动；公开生产环境应换用正式SMTP等托管依赖，本仓库不声称已完成该部署。
+其余设置保留生成值。接口和模型需兼容当前适配器，不要提交密钥。访问地址必须与 `APP_BASE_URL` 一致，不要混用 localhost 和 127.0.0.1。
 
-## 功能与接口
+### 首次启动
 
-- 注册、邮箱验证、登录、登出和 HttpOnly Cookie 会话。
-- Catalog 查询、结构化过滤、书籍知识检索和有证据推荐。
-- Guest 单轮咨询；登录用户的短期会话和明确结构化偏好。
-- 订单预览、API 重启后的确认恢复、幂等确认和库存扣减。
-- MySQL Outbox 租约 Worker 的补货监听与单条通知。
-- 登录用户 Trace 时间线、模型/工具/Evidence/用量安全投影。
-- 公共 `/api/evals` 与 `/api/traces/:run_id/replays` 按 V2 约定返回 404；V2 不保留业务 Replay 执行入口。
-
-主要路径：
-
-```text
-POST /api/auth/register
-POST /api/auth/verify-email
-POST /api/auth/login
-POST /api/auth/logout
-GET  /api/session
-GET  /api/books/search
-GET  /api/books/:book
-POST /api/chat/conversations/:id/messages
-POST /api/chat/conversations/:id/confirmations
-GET  /api/orders
-GET  /api/orders/:order_id
-GET  /api/memories
-POST /api/memories/preferences
-POST /api/tasks/inventory-watches
-GET  /api/notifications
-GET  /api/traces
-GET  /api/traces/:run_id
-```
-
-浏览器请求只访问 Nginx 同源 `/api/*`。内部 gRPC 端口不发布到宿主机，JWT 只在 HttpOnly Cookie 和服务端调用链中传递。
-
-## Fixture 验收
-
-Fixture smoke 会创建唯一测试书籍和账号，覆盖：注册/验证/登录、Catalog 查询、Guest/Auth Chat、订单预览与 API 重启后确认、幂等订单、明确偏好、补货监听、Worker 重启、单条通知、Trace 时间线、Replay/Evals 404 和 Vite SPA 深链接。它不会调用付费模型，也不通过直写业务表伪造订单或通知结果。
+先初始化业务服务并导入演示书：
 
 ```powershell
-.\agent\.venv\Scripts\python.exe deploy/e2e_smoke.py --project bookstore-stage11
+$live = @('--profile', 'v2-app', '-p', 'bookstore', '-f', 'compose.yaml')
+docker compose @live config --quiet
+docker compose @live up -d --build mysql redis qdrant mailpit migrate bootstrap bookstore-service
+python deploy/seed_manual_dataset.py --project bookstore --apply
+docker compose @live build agent-api
 ```
 
-启用观测 Profile 后可验证技术 Trace、Prometheus 和 Grafana 数据源：
+空数据卷需要显式建立真实知识索引。以下命令会调用 Embedding 服务；调优结果必须满足检查要求。如果任一步失败，先解决错误，不要继续：
 
 ```powershell
-docker compose --profile v2-app --profile observability -p bookstore-stage11 -f compose.yaml -f compose.e2e.yaml up -d
-.\agent\.venv\Scripts\python.exe deploy/verify_telemetry.py --project bookstore-stage11
+docker compose @live run --rm --no-deps agent-api python -m app.rag_evaluation run --split tuning --allow-provider-calls --output runtime/initial-tuning.json
+docker compose @live run --rm --no-deps agent-api python -m app.rag_index build --corpus all --tuning-report runtime/initial-tuning.json --allow-provider-calls
+docker compose @live up -d agent-api agent-worker nginx
+docker compose @live ps -a
 ```
 
-上述检查是 Fixture/本地基础设施证据，不是推荐质量或真实 Provider 准确率证据。推荐质量、RAG holdout 和真实模型文案必须按 Spec 单独授权、记录模型身份和费用。
+报告不覆盖同名文件，重试时应更换报告文件名，并同步修改索引命令参数。不要用模拟索引替代真实向量索引。
 
-## 分层测试
+访问 <http://localhost:8088>，在 <http://localhost:8025> 查看验证邮件。
+
+### 后续启动与停止
+
+已有兼容索引且未更换向量模型时：
 
 ```powershell
-$env:GOCACHE = "$PWD/.workcache/go-build"
-$env:GOTMPDIR = "$PWD/.workcache/go-tmp"
-go test ./...
-go vet ./...
-.\agent\.venv\Scripts\python.exe -m pytest agent/tests -q -p no:cacheprovider
-npm run typecheck --prefix web
-npm run build --prefix web
+$live = @('--profile', 'v2-app', '-p', 'bookstore', '-f', 'compose.yaml')
+docker compose @live up -d --build
+docker compose @live ps -a
 ```
 
-需要真实 MySQL/Redis/Qdrant、浏览器或 Provider 的测试必须在报告中标注运行时身份和 PASS/FAIL/BLOCKED/NOT_RUN；静态检查不能替代真实页面验收。
+停止真实模型环境：
 
-## 项目结构
-
-```text
-.
-├── api/                 # Go HTTP/BFF、认证、Catalog、库存和订单路由
-├── rpc/                 # 与 Agent 跨语言调用共用的 protobuf/模型适配层
-├── agent/               # FastAPI、单 Agent、RAG、任务 Worker、Trace 和评测 CLI
-├── web/                 # React/Vite 静态 SPA 与 Playwright 测试
-├── deploy/              # Compose、Fixture、Nginx 和验收脚本
-├── compose.yaml         # 默认本地部署；观测为可选 Profile
-├── compose.e2e.yaml     # 只注入 Fixture 模型和测试 collection
-├── migrations/          # 版本化 Schema；历史迁移不可原位改写
-├── knowledge/           # POLICY 与 BOOK_GUIDE 来源文档
-└── observability/       # 可选 Prometheus/Grafana/OTel/Tempo 配置
+```powershell
+docker compose @live stop
 ```
 
-## 边界
+停止模拟环境：
 
-- 这是本地工程 MVP，不宣称公开生产服务、SLA、真实支付、配送、退款或真实出版物全文。
-- MySQL 是业务事实；Redis 可删除重建，只保存缓存和短期状态；Qdrant 是版本化派生索引。
-- 模型不能创建订单或补货监听；确认和监听提交由确定性 API 执行。
-- Fixture 只验证可重复的协议与安全边界，不能被写成真实模型质量结论。
-- 停止或重启测试栈时保留数据卷；任何破坏性重置都必须先核对项目、备份和授权。
+```powershell
+docker compose --profile v2-app -p bookstore-stage11 -f compose.yaml -f compose.e2e.yaml stop
+```
+
+停止命令保留数据。不要使用 `down -v`，它会删除数据卷。
+
+## 如何使用
+
+1. 在书店注册账号，进入 Mailpit 打开验证邮件，完成邮箱验证后登录。Mailpit 是本地收件箱，不会向真实邮箱投递邮件。
+2. 在咨询页输入找书条件，例如“推荐两本林甲写的中文分布式书，有货，每本50元以内”，或询问“订单确认规则是什么？请注明来源”。
+3. 在同一会话继续追问，例如“第二本适合初学者吗？”或“预算改为30元，其他条件不变”。
+4. 要购买时请求订单预览，核对商品、数量和金额后点击确认，或拒绝取消。模拟订单确认会扣减演示库存。
+5. 对库存不足的图书请求补货监听，明确图书、目标数量和期限，核对后确认创建。在任务和通知页面查看状态；库存达到目标阈值才会产生通知。
+6. 在偏好页面保存或删除偏好，在执行轨迹页面查看自己的工具调用、证据与错误。
+
+游客支持单轮咨询；多轮会话、个人偏好和轨迹需要登录，订单及监听还需要验证邮箱。书目是合成演示数据，库存随测试变化。以上问句是使用示例，不代表当前版本每个场景均已验收通过。
+
+## 常见问题
+
+- 端口占用：先停止占用8088或8025的旧书店环境，不要同时运行两种模式。
+- 初始化状态：`migrate` 和 `bootstrap` 是一次性任务，正常退出不代表故障。
+- 服务报错：真实模型环境执行 `docker compose @live logs --tail 100 agent-api bookstore-service` 查看日志，分享前移除敏感信息。
+- 注册或写操作失败：检查浏览器地址与配置是否一致、邮箱是否验证。
+- 咨询返回错误：在执行轨迹中记录 Run ID 和错误码。服务启动成功不等于所有推荐场景通过测试。
