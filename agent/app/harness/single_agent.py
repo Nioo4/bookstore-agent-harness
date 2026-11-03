@@ -533,6 +533,12 @@ class SingleAgentRuntime:
             elif kind == "effective_request":
                 effective_request = {key: value for key, value in item.items() if key != "kind"}
         tools = [self.tools.get(name).manifest() for name in sorted(allowed_tools) if name in self.tools.names]
+        if effective_request.get("required_question_ids") == ["catalog_fact"]:
+            system += (
+                " This is an exact catalog fact lookup, not a recommendation. "
+                "Read the requested ISBN using Catalog tools. Return price and current stock from that result; "
+                "recommendations and policy_claims must be empty, addressed_question_ids must be ['catalog_fact']."
+            )
         return [
             ModelMessage(role="system", content=system),
             ModelMessage(role="system", content="ALLOWED_TOOLS_JSON=" + json.dumps(tools, ensure_ascii=False, separators=(",", ":"))),

@@ -145,7 +145,14 @@ def deterministic_intent(content: str) -> UserIntent:
     watch_intent = re.search(r"(?:补货|到货|库存).{0,24}(?:监听|提醒|通知)|(?:监听|提醒|通知).{0,24}(?:补货|到货|库存)", text, re.IGNORECASE)
     if watch_intent:
         question_ids.append("inventory_watch")
-    if re.search(r"(?:买|下单|购买|查(?:询|看).{0,8}订单|我的订单|价格|预算|有货|书|图书|推荐|作者|分类|语言|ISBN|isbn)", text, re.IGNORECASE) and not watch_intent:
+    catalog_fact = (
+        bool(re.search(r"ISBN\s*(?:为|是|:|：)?\s*[0-9Xx-]{10,17}", text, re.IGNORECASE))
+        and bool(re.search(r"价格|多少钱|库存|有货", text))
+        and not re.search(r"推荐|适合|比较|区别|差别|哪个|入门|难度|前置|内容|主题|评价|买|下单|购买|预览|规则|政策|监听|提醒|通知", text)
+    )
+    if catalog_fact:
+        question_ids.append("catalog_fact")
+    elif re.search(r"(?:买|下单|购买|查(?:询|看).{0,8}订单|我的订单|价格|预算|有货|书|图书|推荐|作者|分类|语言|ISBN|isbn)", text, re.IGNORECASE) and not watch_intent:
         question_ids.append("recommendation")
     if not question_ids:
         question_ids.append("answer")

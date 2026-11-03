@@ -301,6 +301,8 @@ class ChatService:
                 from app.harness.validator import validate_final_action
 
                 async def final_validator(action, tool_results):
+                    from app.harness.catalog_fact import project_catalog_fact
+                    project_catalog_fact(action, tool_results, request.content, effective_request.intent.required_question_ids)
                     issues = validate_final_action(
                         action,
                         tool_results,
@@ -606,6 +608,8 @@ class ChatService:
         """
         labels = set(question_ids)
         allowed: set[str] = set()
+        if "catalog_fact" in labels:
+            allowed.update({"search_books", "get_book"})
         if "policy" in labels:
             allowed.add("search_policy")
         if labels & {"recommendation", "comparison", "inventory_watch", "answer"}:
